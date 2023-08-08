@@ -24,7 +24,15 @@ public class ABACML
     private static Balana balana;
     public String name;
     public static void main(String[] args){
-        ABACML.Check_ABAC_Permission("leomao", "GET","/UOA_CANVAS_LMS/xamcl/STUDENTS/*");
+        initBalana();
+	String request = createXACMLRequest("ubuntu", "GET", "/UOA_CANVAS_LMS/xamcl/STUDENTS/*");
+	System.out.println("\n==================REQUEST===============\n");
+	System.out.println(request);
+
+	PDP pdp = getPDPNewInstance();
+        String response = pdp.evaluate(request);
+        System.out.println("\n==================RESPONCE===============\n");
+        System.out.println(response);
     }
 
     public static String sayHello(String name){
@@ -88,7 +96,7 @@ public class ABACML
 
         try{
             // using file based policy repository. so set the policy location as system property
-            String policyLocation = (new File(".")).getCanonicalPath() + File.separator + "resources";
+            String policyLocation = (new File("/home/ubuntu/project/abacml")).getCanonicalPath() + File.separator + "resources";
             System.setProperty(FileBasedPolicyFinderModule.POLICY_DIR_PROPERTY, policyLocation);
         } catch (IOException e) {
             System.err.println("Can not locate policy repository");
@@ -104,7 +112,7 @@ public class ABACML
         return new PDP(pdpConfig);
     }
 
-    public static String createXACMLRequest(String uri, String name, String action){
+    public static String createXACMLRequest(String name, String action, String uri){
 
         return "<Request xmlns=\"urn:oasis:names:tc:xacml:3.0:core:schema:wd-17\" CombinedDecision=\"false\" ReturnPolicyIdList=\"false\">\n" +
                 "<Attributes Category=\"urn:oasis:names:tc:xacml:1.0:subject-category:access-subject\">\n" +
