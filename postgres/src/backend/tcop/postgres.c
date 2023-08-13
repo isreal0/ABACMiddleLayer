@@ -4628,18 +4628,19 @@ PostgresMain(const char *dbname, const char *username)
 
 					query_string = pq_getmsgstring(&input_message);
 					pq_getmsgend(&input_message);
-					
+
 					JavaVMOption options[1];
 					JNIEnv *env;
 					JavaVM *jvm;
 					JavaVMInitArgs vm_args;
-
-
+					
 					long status;
 					jclass cls;
 					jmethodID mid;
+					jsize nVMs;
+					bool decision;	
 
-					options[0].optionString = "-Djava.class.path=/home/ubuntu/abacml/target/abacml-dev.jar";
+					options[0].optionString = "-Djava.class.path=/home/ubuntu/project/abacml/target/abacml-dev.jar";
 					memset(&vm_args, 0, sizeof(vm_args));
 					vm_args.version = JNI_VERSION_1_4;
 					vm_args.nOptions = 1;
@@ -4647,8 +4648,25 @@ PostgresMain(const char *dbname, const char *username)
 
 					// 启动虚拟机
 					status = JNI_CreateJavaVM(&jvm, (void**)&env, &vm_args);
-
-					if (status != JNI_ERR)
+					
+					if (status == JNI_EEXIST)
+					{
+						ereport(NOTICE, errmsg("JVM exist. Try to get created jvm."));
+						
+						status = JNI_GetCreatedJavaVMs(&jvm, 1, &nVMs);
+						if(status == JNI_OK)
+						{
+							ereport(NOTICE, errmsg("Got jvm. Try to get env."));
+							status = (*jvm)->AttachCurrentThread(jvm, &env, NULL);
+							ereport(NOTICE, errmsg("Got env. JVM returned status code: %d", status));
+							if(status != JNI_OK)
+							{
+								ereport(NOTICE, errmsg("Failed to get jvm env."));
+							}
+						}
+					}
+						
+					if (status == JNI_OK)
 					{
 						// 先获得class对象
 						cls = (*env)->FindClass(env, "com/yasusoft/abacml/ABACML");
@@ -4659,7 +4677,7 @@ PostgresMain(const char *dbname, const char *username)
 							mid = (*env)->GetStaticMethodID(env, cls, "Check_ABAC_Permission", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z");
 							if (mid != 0)
 							{
-								ereport(NOTICE, errmsg("Got method Check_ABAC_Permission."));
+								ereport(NOTICE, errmsg("Got method Check_ABAC_Permission"));
 								//准备参数 /UOA_CANVAS_LMS/DBO/COURSE/COURSE_NAME, WRITE
 								char uri[100] = "/UOA_CANVAS_LMS/";
 								strcat(uri, dbname);
@@ -4710,24 +4728,32 @@ PostgresMain(const char *dbname, const char *username)
 
 								jboolean result = (jstring)(*env)->CallStaticBooleanMethod(env, cls, mid, arg1, arg2, arg3);
 								if (result == JNI_TRUE){
+									decision = true;
 									ereport(NOTICE,(errmsg("True")));
 								} else if(result == JNI_FALSE){
+									decision = false;
 									ereport(NOTICE,(errmsg("False")));
 								}
+							}
+							else
+							{
+								ereport(NOTICE,(errmsg("Method not found!\n")));
 							}
 						}
 						else 
 						{
 							ereport(NOTICE,(errmsg("Class not found!\n")));
 						}
-
-						(*jvm)->DestroyJavaVM(jvm);
+						
+						(*jvm)->DetachCurrentThread(jvm);
 					}
 					else
 					{
 						ereport(NOTICE,(errmsg("JVM Created failed!\n")));
 					}
-
+					
+					if(decision)
+					{
 					if (am_walsender)
 					{
 						if (!exec_replication_command(query_string))
@@ -4739,6 +4765,7 @@ PostgresMain(const char *dbname, const char *username)
 					valgrind_report_error_query(query_string);
 
 					send_ready_for_query = true;
+					}
 				}
 				break;
 
