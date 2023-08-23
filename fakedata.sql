@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS students (
     PRIMARY KEY (id)
 );
 
-INSERT INTO students SELECT generate_series(1,100000) as key, (floor(random()*10^6))::integer, repeat(chr(int4(random()*26)+65),4), (random()*6^2)::integer;
+INSERT INTO students SELECT generate_series(1,1000000) as key, (floor(random()*10^6))::integer, repeat(chr(int4(random()*26)+65),4), (random()*6^2)::integer;
 

@@ -1,5 +1,7 @@
 # Custom .gitignore
-# pass
+data/
+policy*
+policy*/
 
 # C .gitignore
 # Prerequisites
