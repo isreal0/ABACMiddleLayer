@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <jni.h>
+#include <time.h>
 
 #ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
@@ -4628,7 +4629,10 @@ PostgresMain(const char *dbname, const char *username)
 
 					query_string = pq_getmsgstring(&input_message);
 					pq_getmsgend(&input_message);
-
+					
+					struct timespec start, end;
+					clock_gettime(CLOCK_REALTIME, &start);
+					
 					JavaVMOption options[1];
 					JNIEnv *env;
 					JavaVM *jvm;
@@ -4651,33 +4655,35 @@ PostgresMain(const char *dbname, const char *username)
 					
 					if (status == JNI_EEXIST)
 					{
-						ereport(NOTICE, errmsg("JVM exist. Try to get created jvm."));
+						// ereport(NOTICE, errmsg("JVM exist. Try to get created jvm."));
 						
 						status = JNI_GetCreatedJavaVMs(&jvm, 1, &nVMs);
 						if(status == JNI_OK)
 						{
-							ereport(NOTICE, errmsg("Got jvm. Try to get env."));
+							// ereport(NOTICE, errmsg("Got jvm. Try to get env."));
 							status = (*jvm)->AttachCurrentThread(jvm, &env, NULL);
-							ereport(NOTICE, errmsg("Got env. JVM returned status code: %d", status));
+							// ereport(NOTICE, errmsg("Got env. JVM returned status code: %d", status));
 							if(status != JNI_OK)
 							{
 								ereport(NOTICE, errmsg("Failed to get jvm env."));
 							}
 						}
 					}
-						
+					
+					// clock_gettime(CLOCK_REALTIME, &end);
+
 					if (status == JNI_OK)
 					{
 						// 先获得class对象
 						cls = (*env)->FindClass(env, "com/yasusoft/abacml/ABACML");
 						if (cls != 0)
 						{
-							ereport(NOTICE, errmsg("Got class ABACML."));
+							// ereport(NOTICE, errmsg("Got class ABACML."));
 							// 获取方法ID, 通过方法名和签名, 调用静态方法
 							mid = (*env)->GetStaticMethodID(env, cls, "Check_ABAC_Permission", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z");
 							if (mid != 0)
 							{
-								ereport(NOTICE, errmsg("Got method Check_ABAC_Permission"));
+								// ereport(NOTICE, errmsg("Got method Check_ABAC_Permission"));
 								//准备参数 /UOA_CANVAS_LMS/DBO/COURSE/COURSE_NAME, WRITE
 								char uri[100] = "/UOA_CANVAS_LMS/";
 								strcat(uri, dbname);
@@ -4706,10 +4712,13 @@ PostgresMain(const char *dbname, const char *username)
 								{
 									case 'S':
 										char temp[100];
-										if(parse[3][strlen(parse[3])-1]==';')
-											parse[3][strlen(parse[3])-1] = '\0';
-										sprintf(temp, "/%s/%s", parse[3], parse[1]);
-										strcat(uri, temp);
+										if(i>=4)
+										{
+											if(parse[3][strlen(parse[3])-1]==';')
+												parse[3][strlen(parse[3])-1] = '\0';
+											sprintf(temp, "/%s/%s", parse[3], parse[1]);
+											strcat(uri, temp);
+										}
 										strcpy(action,"Get");
 										break;
 									// case 'U':
@@ -4720,7 +4729,7 @@ PostgresMain(const char *dbname, const char *username)
 										break;
 								}
 
-								ereport(NOTICE, errmsg("The arguments are: %s, %s, %s", username, action, uri));
+								// ereport(NOTICE, errmsg("The arguments are: %s, %s, %s", username, action, uri));
 
 								jstring arg1 = (*env)->NewStringUTF(env, username);
 								jstring arg2 = (*env)->NewStringUTF(env, action);
@@ -4729,10 +4738,10 @@ PostgresMain(const char *dbname, const char *username)
 								jboolean result = (jstring)(*env)->CallStaticBooleanMethod(env, cls, mid, arg1, arg2, arg3);
 								if (result == JNI_TRUE){
 									decision = true;
-									ereport(NOTICE,(errmsg("True")));
+									// ereport(NOTICE,(errmsg("True")));
 								} else if(result == JNI_FALSE){
 									decision = false;
-									ereport(NOTICE,(errmsg("False")));
+									// ereport(NOTICE,(errmsg("False")));
 								}
 							}
 							else
@@ -4752,8 +4761,18 @@ PostgresMain(const char *dbname, const char *username)
 						ereport(NOTICE,(errmsg("JVM Created failed!\n")));
 					}
 					
-					if(decision)
+					clock_gettime(CLOCK_REALTIME, &end);
+					long seconds = end.tv_sec - start.tv_sec;
+					long nanoseconds = end.tv_nsec - start.tv_nsec;
+					double elapsed = seconds + nanoseconds*1e-9;
+					ereport(NOTICE, (errmsg("ABAC execution time: %.6lfs", elapsed)));
+
+					if(!decision)
 					{
+						ereport(NOTICE, (errmsg("ABACML: Permission Denied.")));
+						send_ready_for_query = true;
+						break;
+					}	
 					if (am_walsender)
 					{
 						if (!exec_replication_command(query_string))
@@ -4765,7 +4784,7 @@ PostgresMain(const char *dbname, const char *username)
 					valgrind_report_error_query(query_string);
 
 					send_ready_for_query = true;
-					}
+					
 				}
 				break;
 

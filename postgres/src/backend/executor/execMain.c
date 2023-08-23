@@ -67,6 +67,7 @@
 #include "utils/rls.h"
 #include "utils/ruleutils.h"
 #include "utils/snapmgr.h"
+#include "time.h"
 
 
 /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
@@ -847,7 +848,16 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	/*
 	 * Do permissions checks
 	 */
+	struct timespec start, end;
+	clock_gettime(CLOCK_REALTIME, &start);
+	
 	ExecCheckPermissions(rangeTable, plannedstmt->permInfos, true);
+	
+	clock_gettime(CLOCK_REALTIME, &end);
+	long seconds = end.tv_sec - start.tv_sec;
+	long nanoseconds = end.tv_nsec - start.tv_nsec;
+	double elapsed = seconds + nanoseconds*1e-9;
+	ereport(NOTICE, (errmsg("RBAC execution time: %.6lfs", elapsed)));
 
 	/*
 	 * initialize the node's execution state
