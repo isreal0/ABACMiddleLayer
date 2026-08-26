@@ -39,7 +39,7 @@ public class UOACanonicalDecisionTest extends TestCase
     public void testPermit_SameDepartmentSufficientClearance() {
         String decision = ABACML.Evaluate_ABAC_Decision(
                 "alice", "student", "ComputerScience", 3,
-                "STUDENT_GRADES", "alice", "ComputerScience", 2,
+                "COMPSCI101_SCORE", "alice", "ComputerScience", 2,
                 "SELECT",
                 "campus", 10);
         assertEquals("Permit", decision);
@@ -48,7 +48,7 @@ public class UOACanonicalDecisionTest extends TestCase
     public void testDeny_DifferentDepartment() {
         String decision = ABACML.Evaluate_ABAC_Decision(
                 "bob", "student", "Engineering", 3,
-                "STUDENT_GRADES", "alice", "ComputerScience", 2,
+                "COMPSCI101_SCORE", "alice", "ComputerScience", 2,
                 "SELECT",
                 "campus", 10);
         assertEquals("Deny", decision);
@@ -57,7 +57,7 @@ public class UOACanonicalDecisionTest extends TestCase
     public void testDeny_InsufficientClearance() {
         String decision = ABACML.Evaluate_ABAC_Decision(
                 "carol", "student", "ComputerScience", 1,
-                "STUDENT_GRADES", "alice", "ComputerScience", 2,
+                "COMPSCI101_SCORE", "alice", "ComputerScience", 2,
                 "SELECT",
                 "campus", 10);
         assertEquals("Deny", decision);
@@ -66,7 +66,7 @@ public class UOACanonicalDecisionTest extends TestCase
     public void testNotApplicable_ActionOutsidePolicyTarget() {
         String decision = ABACML.Evaluate_ABAC_Decision(
                 "alice", "student", "ComputerScience", 3,
-                "STUDENT_GRADES", "alice", "ComputerScience", 2,
+                "COMPSCI101_SCORE", "alice", "ComputerScience", 2,
                 "DELETE",
                 "campus", 10);
         assertEquals("NotApplicable", decision);

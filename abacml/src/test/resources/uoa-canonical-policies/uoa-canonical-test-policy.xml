@@ -1,6 +1,6 @@
 <Policy xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17" PolicyId="uoa_canvas_department_clearance_policy" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable" Version="1.0">
   <Description>
-    UOA Canvas LMS canonical test policy: a SELECT on a student-record
+    UOA Canvas LMS canonical test policy: a SELECT on a student course-score
     resource is permitted only if the requesting subject's department
     matches the resource's owning department and the subject's clearance
     is at least the resource's classification level. Everything else
