@@ -139,6 +139,19 @@ result, not just four independent "it runs" checks.
   into nested JSON objects) but has **no native set-membership operator**
   — `action in {SELECT, UPDATE}`-style conditions become explicit
   `(x=="SELECT" || x=="UPDATE")` OR-chains instead.
+- **Casbin-CPP's `Enforcer::Enforce()` is not thread-safe at all**
+  (confirmed empirically during Step 5B concurrency testing): sharing one
+  `Enforcer` instance across worker threads segfaults at concurrency ≥ 2,
+  and giving each thread its own independently-constructed instance
+  *still* segfaults at concurrency ≥ 2 — so the fault is global/static
+  state inside the library (most likely the vendored Exprtk expression
+  engine), not per-instance state, and isn't fixable from the adapter
+  side. Concurrency for this engine is measured via independent OS
+  processes instead (`scripts/run-casbin-benchmark.py`), the same
+  approach used for AuthzForce (which needs it for an unrelated reason —
+  no batch mode, not a thread-safety bug). Anyone embedding this Casbin-CPP
+  build in a multi-threaded server needs either external locking around
+  every `Enforce()` call or a pool of single-threaded instances/processes.
 - **SunXACML** is unmaintained XACML 2.0; XACML 3.0-only constructs used by
   AuthzForce scenarios must be marked `unsupported` here, not silently
   downgraded. It also has a real runtime gap on modern JDKs: the pinned

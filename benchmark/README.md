@@ -146,11 +146,49 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   discussion: 3 orders of magnitude less peak memory than the XML-based
   engines, consistent with plain-CSV parsing versus DOM tree construction.
 
-  **Not yet done:** concurrency testing (concurrency_levels beyond 1),
-  guide-scale iteration counts (would require a faster AuthzForce
-  invocation path — e.g. its embedded API instead of spawning the CLI —
-  to be practical), and fixing the AuthzForce peak-RSS measurement to
-  target the actual subprocess.
+  **Concurrency testing** (`concurrency_levels=1,2,4,8`, small scale only
+  — medium/large × 4 levels would multiply AuthzForce's already-slow
+  per-call JVM-spawn cost past a practical runtime for this session):
+
+  | Engine | c=1 | c=2 | c=4 | c=8 |
+  |---|---|---|---|---|
+  | Middle Layer (req/s) | 246 | 492 | 941 | 1074 |
+  | SunXACML (req/s) | 202 | 387 | 701 | 845 |
+  | Casbin-CPP (req/s) | 2403 | 4449 | 6834 | 10238 |
+  | AuthzForce (req/s) | 0.70 | 1.29 | 1.49 | 1.61 |
+
+  Middle Layer and SunXACML share **one PDP instance across worker
+  threads** (matching how a real long-running PDP service is actually hit
+  by concurrent requests) — both scale well up to 4 threads with
+  diminishing returns toward 8 (this VM has 8 vCPUs), and per-call median
+  latency stays roughly flat, meaning the throughput gain is real
+  parallelism, not queuing.
+
+  **Casbin-CPP hit a real bug during this pass**: `casbin::Enforcer` is
+  not thread-safe at all — sharing one instance across worker threads
+  segfaulted at concurrency ≥ 2, and giving each thread its own
+  independently-constructed instance *still* segfaulted at concurrency
+  ≥ 2, pointing at global/static state inside the library (most likely
+  the vendored Exprtk expression engine), not something fixable from the
+  adapter side. Concurrency for this engine is therefore measured via
+  independent OS processes instead (`run-casbin-benchmark.py`, same
+  approach as AuthzForce) — confirmed zero crashes after the fix, with by
+  far the best scaling of any engine (10,238 req/s at c=8) since each
+  process only parses a tiny CSV rather than spinning up a JVM.
+
+  AuthzForce improves only modestly (0.70 → 1.61 req/s) since 8 concurrent
+  JVM spawns compete heavily for the same 8 vCPUs during startup — the
+  per-call cost is dominated by JVM initialization, not evaluation, so
+  concurrency helps far less here than for the in-process engines.
+
+  **Not yet done:** guide-scale iteration counts (would require a faster
+  AuthzForce invocation path — e.g. its embedded API instead of spawning
+  the CLI — to be practical), concurrency at medium/large scale, fixing
+  the AuthzForce/Casbin-CPP (process-based) peak-RSS measurement to target
+  the actual worker processes rather than the orchestrator, and an
+  independent check that concurrent evaluation doesn't silently corrupt
+  *results* (not just crash) on Middle Layer/SunXACML — absence of a
+  crash was treated as sufficient evidence for this pass, not proven.
 - **Step 6 (aggregation + report):** not started.
 
 See `docs/architecture.md` for the implementation architecture and
