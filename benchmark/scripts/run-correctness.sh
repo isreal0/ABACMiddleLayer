@@ -82,7 +82,20 @@ case "$ENGINE" in
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
   casbin-cpp)
-    echo "error: no adapter implemented yet for '$ENGINE' (Step 4 in progress)." >&2
-    exit 1
+    RUNNER_BIN="/opt/abac-research/engine/casbin-cpp/build/casbin_corpus_runner"
+    if [ ! -x "$RUNNER_BIN" ]; then
+      echo "error: casbin_corpus_runner not built. Run:" >&2
+      echo "  g++ -std=c++17 -O2 -I/opt/abac-research/engine/casbin-cpp/include \\" >&2
+      echo "    -I/opt/abac-research/engine/casbin-cpp/build/_deps/json-src/single_include \\" >&2
+      echo "    $HARNESS_DIR/harness/casbin-cpp/CasbinCorpusRunner.cpp \\" >&2
+      echo "    /opt/abac-research/engine/casbin-cpp/build/casbin/libcasbin.a -lpthread -o $RUNNER_BIN" >&2
+      exit 1
+    fi
+    "$RUNNER_BIN" \
+      "$GENERATED_DIR/casbin-cpp/model.conf" \
+      "$GENERATED_DIR/casbin-cpp/policy.csv" \
+      "$GENERATED_DIR/casbin-cpp/scenarios.tsv" \
+      "$NORMALIZED_DIR/casbin-cpp.jsonl" \
+      "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
 esac
