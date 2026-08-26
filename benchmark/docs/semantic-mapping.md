@@ -15,10 +15,11 @@ documented here, not just handled silently.
 `corpus/canonical/scenarios.json` exists (10 scenarios, UOA course-score
 domain: a student's score in a specific course). Ground truth was derived
 against `corpus/reference-policies/xacml3-course-score-policy.xml`, a
-hand-authored XACML 3.0 policy using `permit-overrides` combining. Only the
-**Middle Layer adapter** is built and verified so far (10/10 correct);
-SunXACML, AuthzForce, and Casbin-CPP adapters are still pending, so their
-columns in the template below are unfilled.
+hand-authored XACML 3.0 policy using `permit-overrides` combining.
+**Middle Layer** and **AuthzForce Core** adapters are built and verified
+(10/10 correct each), sharing the exact same reference policy file.
+SunXACML and Casbin-CPP adapters are still pending, so their columns in
+the template below are unfilled.
 
 Deliberately deferred to a later corpus revision (not represented by any
 engine yet):
@@ -37,12 +38,13 @@ engine yet):
 
 ## Domain and AttributeId convention (all engines, fixed in Step 2)
 
-All canonical scenarios model **UOA Canvas LMS** records, matching the
-`/UOA_CANVAS_LMS/` prefix already hardcoded in `postgres.c` before this
-project started, rather than a generic researcher/dataset example: a
-subject is a student/staff account, a resource is a student-record table,
-and the action is the SQL verb already extracted on the Middle Layer's C
-side (SELECT/INSERT/UPDATE/DELETE).
+All canonical scenarios model **UOA student course scores** (e.g. a
+student's mark in `COMPSCI101`), matching the `/UOA_CANVAS_LMS/` prefix
+already hardcoded in `postgres.c` before this project started, rather than
+a generic researcher/dataset example: a subject is a student/staff
+account, a resource is one student's score record for one course, and the
+action is the SQL verb already extracted on the Middle Layer's C side
+(SELECT/INSERT/UPDATE/DELETE).
 
 | Field | Category | AttributeId | DataType |
 |---|---|---|---|
@@ -80,22 +82,22 @@ target).
 
 | Canonical feature | Middle Layer | SunXACML (XACML 2.0) | AuthzForce (XACML 3.0) | Casbin-CPP | Notes / limitations |
 |---|---|---|---|---|---|
-| Permit | ✅ abac-001/002/003 | pending | pending | pending | |
-| Deny | ✅ abac-004/005/006/007/008/009 | pending | pending | pending | |
-| NotApplicable | ✅ abac-010 | pending | pending | pending | |
+| Permit | ✅ abac-001/002/003 | pending | ✅ abac-001/002/003 (same policy) | pending | |
+| Deny | ✅ abac-004/005/006/007/008/009 | pending | ✅ abac-004/005/006/007/008/009 | pending | |
+| NotApplicable | ✅ abac-010 | pending | ✅ abac-010 | pending | |
 | Missing attribute | deferred | deferred | deferred | deferred | See Status above — needs empirical cross-engine pass |
 | Datatype error | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
-| Equality condition | ✅ owner==subject-id, role==literal, dept==dept | pending | pending | pending | |
-| Numeric comparison | ✅ clearance>=classification, hour range | pending | pending | pending | |
-| Boolean logic | ✅ AND (all rules), OR (network campus/vpn) | pending | pending | pending | |
-| Set membership | ✅ action in {SELECT,UPDATE} / policy Target {SELECT,UPDATE,DELETE} | pending | pending | pending | |
-| Owner-based rule | ✅ abac-002/006 | pending | pending | pending | |
-| Role-based rule | ✅ abac-001 (admin), abac-003 (lecturer) | pending | pending | pending | |
-| Department-based rule | ✅ abac-003/004 | pending | pending | pending | |
-| Clearance/classification comparison | ✅ abac-003/005 | pending | pending | pending | |
-| Time-of-day condition | ✅ abac-008 | pending | pending | pending | |
-| Network condition | ✅ abac-007 | pending | pending | pending | |
-| Permit-overrides | ✅ used as the corpus's only combining algorithm so far | pending | pending | pending | Not yet contrasted against deny-overrides/first-applicable on the same conflict — see Status |
+| Equality condition | ✅ owner==subject-id, role==literal, dept==dept | pending | ✅ same policy, same result | pending | |
+| Numeric comparison | ✅ clearance>=classification, hour range | pending | ✅ same policy, same result | pending | |
+| Boolean logic | ✅ AND (all rules), OR (network campus/vpn) | pending | ✅ same policy, same result | pending | |
+| Set membership | ✅ action in {SELECT,UPDATE} / policy Target {SELECT,UPDATE,DELETE} | pending | ✅ same policy, same result | pending | |
+| Owner-based rule | ✅ abac-002/006 | pending | ✅ abac-002/006 | pending | |
+| Role-based rule | ✅ abac-001 (admin), abac-003 (lecturer) | pending | ✅ same policy, same result | pending | |
+| Department-based rule | ✅ abac-003/004 | pending | ✅ same policy, same result | pending | |
+| Clearance/classification comparison | ✅ abac-003/005 | pending | ✅ same policy, same result | pending | |
+| Time-of-day condition | ✅ abac-008 | pending | ✅ same policy, same result | pending | |
+| Network condition | ✅ abac-007 | pending | ✅ same policy, same result | pending | |
+| Permit-overrides | ✅ XACML 3.0 URN (not the legacy 1.0 one — see below) | pending | ✅ same policy, same result | pending | Not yet contrasted against deny-overrides/first-applicable on the same conflict — see Status |
 | Deny-overrides | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
 | First-applicable | not yet in corpus (used only in Step 2's throwaway test policy, not the canonical corpus) | not yet in corpus | not yet in corpus | not yet in corpus | |
 | Obligations | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
@@ -115,3 +117,14 @@ target).
   `Evaluate_ABAC_Decision` takes resource attributes directly and does not
   go through Postgres at all, so per-resource scenarios are representable
   for benchmarking even though the live SQL integration is coarser.
+- **AuthzForce Core rejects legacy (XACML 1.0/2.0-namespaced) combining
+  algorithm URNs outright** (`UnsupportedOperationException`), even under
+  a XACML 3.0-schema policy. Balana accepts both forms. The shared
+  reference policy therefore uses
+  `urn:oasis:names:tc:xacml:3.0:rule-combining-algorithm:permit-overrides`,
+  not the `:1.0:` form — anything hand-authoring a policy meant to run on
+  both engines must use the 3.0-namespaced algorithm URN.
+- **AuthzForce Core's PDP CLI has no batch mode** — one JVM invocation per
+  request. Fine for correctness testing; something to account for when
+  Step 5 separates policy-load time from per-request evaluation time, since
+  JVM startup cost is otherwise conflated with evaluation cost per call.

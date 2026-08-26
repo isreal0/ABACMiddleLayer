@@ -57,10 +57,17 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   canonical corpus in the UOA course-score domain (a student's score in a
   specific course) covering Permit/Deny/NotApplicable, owner/role/
   department rules, numeric clearance comparison, time-of-day, network
-  condition, and set-membership on action. Middle Layer adapter done and
-  verified: `scripts/run-correctness.sh middle-layer` runs for real,
-  **10/10 scenarios correct**. SunXACML, AuthzForce, and Casbin-CPP
-  adapters are not built yet — that's what's left of Step 4.
+  condition, and set-membership on action. **Middle Layer** and
+  **AuthzForce Core** adapters are done and verified —
+  `scripts/run-correctness.sh middle-layer` and `... authzforce` both run
+  for real, **10/10 scenarios correct** on each, against the exact same
+  reference XACML 3.0 policy (`corpus/reference-policies/xacml3-course-
+  score-policy.xml`). One real interop bug found and fixed along the way:
+  AuthzForce rejects the legacy XACML 1.0-namespaced `permit-overrides`
+  combining-algorithm URN outright — switched to the XACML 3.0-namespaced
+  one, which both engines accept. **SunXACML** (needs XACML 2.0 syntax
+  translation) and **Casbin-CPP** (different paradigm entirely) adapters
+  are not built yet — that's what's left of Step 4.
 - **Step 5 (correctness + benchmarking):** not started.
 - **Step 6 (aggregation + report):** not started.
 
