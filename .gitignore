@@ -84,6 +84,4 @@ hs_err_pid*
 replay_pid*
 
 # Editor swap files
-*.swp
-*.swo
-*.swn
+*.sw[a-z]
