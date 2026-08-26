@@ -1,0 +1,102 @@
+[
+  {
+    "id": "abac-001",
+    "description": "Admin can view/update any student's course score (role-based override), during business hours on campus.",
+    "subject": { "id": "admin_jones", "role": "admin", "department": "Registry", "clearance": 5 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Permit",
+    "tags": ["small", "role-based", "compatibility-subset"]
+  },
+  {
+    "id": "abac-002",
+    "description": "A student can view their own course score (owner-based rule), during business hours on campus.",
+    "subject": { "id": "alice", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Permit",
+    "tags": ["small", "owner-based", "equality-condition", "compatibility-subset"]
+  },
+  {
+    "id": "abac-003",
+    "description": "A lecturer in the same department with sufficient clearance can view/update a course score.",
+    "subject": { "id": "prof_smith", "role": "lecturer", "department": "ComputerScience", "clearance": 3 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "UPDATE",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Permit",
+    "tags": ["small", "role-based", "department-based", "numeric-comparison", "compatibility-subset"]
+  },
+  {
+    "id": "abac-004",
+    "description": "A lecturer from a different department is denied access to a course score.",
+    "subject": { "id": "prof_taylor", "role": "lecturer", "department": "Engineering", "clearance": 3 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Deny",
+    "tags": ["small", "department-based", "compatibility-subset"]
+  },
+  {
+    "id": "abac-005",
+    "description": "A lecturer in the same department but with insufficient clearance is denied.",
+    "subject": { "id": "prof_lee", "role": "lecturer", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Deny",
+    "tags": ["small", "numeric-comparison", "clearance-classification", "compatibility-subset"]
+  },
+  {
+    "id": "abac-006",
+    "description": "A student is denied access to another student's course score (not owner, not staff).",
+    "subject": { "id": "bob", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Deny",
+    "tags": ["small", "owner-based", "compatibility-subset"]
+  },
+  {
+    "id": "abac-007",
+    "description": "An otherwise-permitted owner request is denied when made from an external (off-campus, non-VPN) network.",
+    "subject": { "id": "alice", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "external", "hour": 10 },
+    "expected": "Deny",
+    "tags": ["small", "network-condition", "compatibility-subset"]
+  },
+  {
+    "id": "abac-008",
+    "description": "An otherwise-permitted owner request is denied outside business hours (22:00).",
+    "subject": { "id": "alice", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "SELECT",
+    "environment": { "network": "campus", "hour": 22 },
+    "expected": "Deny",
+    "tags": ["small", "time-of-day", "compatibility-subset"]
+  },
+  {
+    "id": "abac-009",
+    "description": "An otherwise-permitted owner request is denied for an action outside the permitted set (DELETE is not in {SELECT, UPDATE}).",
+    "subject": { "id": "alice", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "DELETE",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "Deny",
+    "tags": ["small", "set-membership", "compatibility-subset"]
+  },
+  {
+    "id": "abac-010",
+    "description": "An action outside the policy's own Target (TRUNCATE is not SELECT/UPDATE/DELETE) falls entirely outside scope.",
+    "subject": { "id": "alice", "role": "student", "department": "ComputerScience", "clearance": 1 },
+    "resource": { "id": "COMPSCI101_SCORE", "owner": "alice", "department": "ComputerScience", "classification": 2 },
+    "action": "TRUNCATE",
+    "environment": { "network": "campus", "hour": 10 },
+    "expected": "NotApplicable",
+    "tags": ["small", "not-applicable", "compatibility-subset"]
+  }
+]

@@ -1,0 +1,219 @@
+<Policy xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17" PolicyId="uoa_course_score_policy" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:permit-overrides" Version="1.0">
+  <Description>
+    UOA course-score canonical reference policy. Encodes the ground truth
+    used to derive `expected` in corpus/canonical/scenarios.json:
+      - admins may SELECT/UPDATE any course score (role-based override)
+      - a student may SELECT their own course score (owner-based)
+      - a lecturer may SELECT/UPDATE a course score in their own department
+        if their clearance is at least the score's classification
+        (department-based + numeric clearance comparison)
+      - all of the above additionally require network in {campus, vpn} and
+        hour in [8, 20] (network condition, time-of-day condition)
+      - everything else in scope (SELECT/UPDATE/DELETE) is denied
+      - actions outside {SELECT, UPDATE, DELETE} are outside this policy's
+        Target entirely (NotApplicable), not denied
+  </Description>
+  <Target>
+    <AnyOf>
+      <AllOf>
+        <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+          <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">SELECT</AttributeValue>
+          <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+        </Match>
+      </AllOf>
+      <AllOf>
+        <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+          <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">UPDATE</AttributeValue>
+          <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+        </Match>
+      </AllOf>
+      <AllOf>
+        <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+          <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">DELETE</AttributeValue>
+          <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+        </Match>
+      </AllOf>
+    </AnyOf>
+  </Target>
+
+  <Rule Effect="Permit" RuleId="admin-override">
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+            <AttributeDesignator AttributeId="urn:uoa:canvas:subject:role" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+    <Condition>
+      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Apply>
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">campus</AttributeValue>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Apply>
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">vpn</AttributeValue>
+          </Apply>
+        </Apply>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+            </Apply>
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">8</AttributeValue>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-less-than-or-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+            </Apply>
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">20</AttributeValue>
+          </Apply>
+        </Apply>
+      </Apply>
+    </Condition>
+  </Rule>
+
+  <Rule Effect="Permit" RuleId="owner-select">
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">SELECT</AttributeValue>
+            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+    <Condition>
+      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+            <AttributeDesignator AttributeId="urn:uoa:canvas:resource:owner" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Apply>
+        </Apply>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+              </Apply>
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">campus</AttributeValue>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+              </Apply>
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">vpn</AttributeValue>
+            </Apply>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+                <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+              </Apply>
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">8</AttributeValue>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-less-than-or-equal">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+                <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+              </Apply>
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">20</AttributeValue>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Apply>
+    </Condition>
+  </Rule>
+
+  <Rule Effect="Permit" RuleId="lecturer-department-clearance">
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">lecturer</AttributeValue>
+            <AttributeDesignator AttributeId="urn:uoa:canvas:subject:role" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">SELECT</AttributeValue>
+            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">UPDATE</AttributeValue>
+            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+    <Condition>
+      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+            <AttributeDesignator AttributeId="urn:uoa:canvas:subject:department" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+            <AttributeDesignator AttributeId="urn:uoa:canvas:resource:department" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Apply>
+        </Apply>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:subject:clearance" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+              <AttributeDesignator AttributeId="urn:uoa:canvas:resource:classification" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+            </Apply>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                  <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                </Apply>
+                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">campus</AttributeValue>
+              </Apply>
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                  <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                </Apply>
+                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">vpn</AttributeValue>
+              </Apply>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+                  <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+                </Apply>
+                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">8</AttributeValue>
+              </Apply>
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-less-than-or-equal">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">
+                  <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+                </Apply>
+                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">20</AttributeValue>
+              </Apply>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Apply>
+    </Condition>
+  </Rule>
+
+  <Rule Effect="Deny" RuleId="default-deny"/>
+</Policy>
