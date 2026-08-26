@@ -36,8 +36,16 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
 
 - **Step 0 (infra verification):** done — see `control/inventory.csv` on the
   coordinating machine.
-- **Step 1 (workspace + this harness scaffold):** in progress.
-- **Step 2 (Middle Layer implementation review/build):** not started.
+- **Step 1 (workspace + this harness scaffold):** done — shared
+  `/opt/abac-research` layout, common utilities, and this `benchmark/`
+  subtree on all four VMs, pinned to the same commit.
+- **Step 2 (Middle Layer implementation review/build):** in progress.
+  Confirmed PDP = WSO2 Balana 1.1.12; added `ABACML.Evaluate_ABAC_Decision`
+  with the full canonical UOA Canvas LMS attribute model and real
+  Permit/Deny/NotApplicable/Indeterminate decisions, verified by a 4-case
+  JUnit test, without touching the live Postgres/JNI path
+  (`Check_ABAC_Permission`) or its policy directory. See
+  `docs/architecture.md` and `docs/semantic-mapping.md`.
 - **Step 3 (baseline installs):** not started.
 - **Step 4 (canonical corpus + adapters):** not started.
 - **Step 5 (correctness + benchmarking):** not started.
