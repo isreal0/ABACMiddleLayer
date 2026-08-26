@@ -84,8 +84,13 @@ for CONCURRENCY in $CONCURRENCY_LEVELS; do
         "$MANIFEST" "$CONCURRENCY" "$RAW_TSV" "$SUMMARY_JSON"
       ;;
     casbin-cpp)
+      # Process-based, not thread-based -- casbin::Enforcer segfaults under
+      # concurrent thread access even with one instance per thread (see
+      # docs/semantic-mapping.md), so concurrency is independent OS
+      # processes, same approach as AuthzForce.
       RUNNER_BIN="/opt/abac-research/engine/casbin-cpp/build/casbin_corpus_runner"
-      "$RUNNER_BIN" benchmark \
+      python3 "$HARNESS_DIR/scripts/run-casbin-benchmark.py" \
+        "$RUNNER_BIN" \
         "$GENERATED_DIR/casbin-cpp/$SCALE/model.conf" \
         "$GENERATED_DIR/casbin-cpp/$SCALE/policy.csv" \
         "$GENERATED_DIR/casbin-cpp/$SCALE/scenarios.tsv" \

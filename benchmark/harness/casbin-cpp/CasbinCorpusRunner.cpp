@@ -264,8 +264,6 @@ static void benchmarkWorker(casbin::Enforcer* enforcer, const std::vector<std::m
 static int runBenchmark(const std::string& modelConf, const std::string& policyCsv, const std::string& scenariosTsv,
                          const std::string& manifestConf, int concurrency,
                          const std::string& rawOutputTsv, const std::string& summaryOutputJson) {
-    casbin::Enforcer enforcer(modelConf, policyCsv);
-
     auto manifest = readManifestConf(manifestConf);
     int warmup = std::stoi(manifest["warmup_iterations"]);
     int measured = std::stoi(manifest["measured_iterations"]);
@@ -281,8 +279,21 @@ static int runBenchmark(const std::string& modelConf, const std::string& policyC
     }
     size_t n = scenarios.size();
 
+    // casbin::Enforcer::Enforce() is NOT thread-safe for concurrent calls on
+    // a single shared instance -- confirmed empirically (segfaults at
+    // concurrency >= 2 with one shared instance). Each worker therefore
+    // gets its OWN independently-loaded Enforcer instance rather than
+    // sharing one; this measures N independent Casbin instances serving
+    // requests concurrently (e.g. N replicas behind a load balancer), not
+    // "one instance handling concurrent requests", which this library does
+    // not support without external locking. See docs/semantic-mapping.md.
+    std::vector<std::unique_ptr<casbin::Enforcer>> enforcers;
+    for (int w = 0; w < concurrency; w++) {
+        enforcers.push_back(std::unique_ptr<casbin::Enforcer>(new casbin::Enforcer(modelConf, policyCsv)));
+    }
+
     for (int i = 0; i < warmup; i++) {
-        try { enforcer.Enforce(buildDataMap(scenarios[i % n])); } catch (...) {}
+        try { enforcers[0]->Enforce(buildDataMap(scenarios[i % n])); } catch (...) {}
     }
 
     std::vector<long long> allLatencies;
@@ -294,7 +305,7 @@ static int runBenchmark(const std::string& modelConf, const std::string& policyC
         std::vector<std::thread> threads;
         auto repStart = std::chrono::steady_clock::now();
         for (int w = 0; w < concurrency; w++) {
-            threads.emplace_back(benchmarkWorker, &enforcer, &scenarios, w, measured, &results[w]);
+            threads.emplace_back(benchmarkWorker, enforcers[w].get(), &scenarios, w, measured, &results[w]);
         }
         for (auto& t : threads) t.join();
         totalWallSeconds += std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -317,7 +328,48 @@ static int runBenchmark(const std::string& modelConf, const std::string& policyC
     return 0;
 }
 
+// Single-process, single-threaded worker used by scripts/run-casbin-benchmark.py
+// for concurrency testing: casbin::Enforcer is not safe for concurrent use
+// from multiple threads even with one instance per thread (confirmed
+// empirically -- segfaults at concurrency >= 2 either way, pointing at
+// global/static state inside the library, likely the vendored Exprtk
+// expression engine, not just per-instance state). Concurrency is instead
+// achieved the same way as AuthzForce: independent OS processes, no shared
+// memory at all. Writes only latency_ns per iteration (no repetitions
+// concept here -- the Python orchestrator calls this once per repetition).
+//
+// Usage: casbin_corpus_runner benchmark-worker <modelConf> <policyCsv> <scenariosTsv> <measured> <rawOutputTsv>
+static int runBenchmarkWorker(const std::string& modelConf, const std::string& policyCsv, const std::string& scenariosTsv,
+                               int measured, const std::string& rawOutputTsv) {
+    casbin::Enforcer enforcer(modelConf, policyCsv);
+
+    auto rows = readTsvRows(scenariosTsv);
+    std::vector<std::string> header = rows.front();
+    std::vector<std::map<std::string, std::string>> scenarios;
+    for (size_t r = 1; r < rows.size(); r++) {
+        std::map<std::string, std::string> f;
+        for (size_t i = 0; i < header.size() && i < rows[r].size(); i++) f[header[i]] = rows[r][i];
+        scenarios.push_back(f);
+    }
+    size_t n = scenarios.size();
+
+    std::ofstream rawOut(rawOutputTsv);
+    rawOut << "iteration\tscenario_id\tlatency_ns\n";
+    for (int i = 0; i < measured; i++) {
+        const auto& sc = scenarios[i % n];
+        auto start = std::chrono::steady_clock::now();
+        try { enforcer.Enforce(buildDataMap(sc)); } catch (...) {}
+        long long latencyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        rawOut << i << "\t" << sc.at("id") << "\t" << latencyNs << "\n";
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 7 && std::string(argv[1]) == "benchmark-worker") {
+        return runBenchmarkWorker(argv[2], argv[3], argv[4], std::stoi(argv[5]), argv[6]);
+    }
     if (argc == 9 && std::string(argv[1]) == "benchmark") {
         return runBenchmark(argv[2], argv[3], argv[4], argv[5], std::stoi(argv[6]), argv[7], argv[8]);
     }
