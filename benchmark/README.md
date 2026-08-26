@@ -98,24 +98,45 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   of fabricated timing. First look at the scaling signal (single-sample,
   not yet averaged over repeated iterations — see caveat below):
 
+  Decoys were initially a single never-matching condition repeated N
+  times — cheaper to parse than a real rule, which understated XACML's
+  parsing cost. Reworked into three structurally-varied, realistic shapes
+  (role+network / department+clearance / action+hour) drawn from real
+  value pools (15 departments, 10 roles, etc.) via a fixed-seed RNG, all
+  `Effect="Deny"` so they're safe to let coincidentally match a real
+  scenario under `permit-overrides` (a Deny-effect rule can never flip an
+  expected Permit) — correctness re-verified 10/10 (9/9 Casbin-CPP) at all
+  three scales after the change. Current numbers:
+
   | Engine | small load | medium load | large load |
   |---|---|---|---|
-  | Middle Layer | 171 ms | 261 ms | 458 ms |
-  | SunXACML | 93 ms | 205 ms | 490 ms |
-  | Casbin-CPP | 0.4 ms | 2.0 ms | 7.4 ms |
-  | AuthzForce (total, no batch mode) | 1.56 s | 2.09 s | 3.33 s |
+  | Middle Layer | 180 ms | 286 ms | 572 ms |
+  | SunXACML | 91 ms | 216 ms | 616 ms |
+  | Casbin-CPP | 0.7 ms | 2.1 ms | 7.5 ms |
+  | AuthzForce (total, no batch mode) | 1.35 s | 2.43 s | 4.36 s |
 
-  Casbin-CPP's policy files are trivially cheap to parse (plain CSV) next
-  to the three XML-based engines. AuthzForce's numbers are the whole
-  subprocess wall time (JVM startup + load + eval, inseparable — it has no
-  batch mode, see `semantic-mapping.md`), not a clean load-only figure, so
-  it isn't directly comparable to the other three's load-only column.
-  **Caveat:** these are single samples per tier, not the guide's proper
-  warmup/measured-iteration protocol — SunXACML's `evaluation_ns` in
-  particular didn't show a clean trend on one sample (JIT/cache noise),
-  which is exactly why Step 5B calls for averaging over many iterations
-  rather than trusting one data point. That protocol (benchmark manifest,
-  concurrency levels, percentiles) hasn't been built yet.
+  Casbin-CPP's policy files are plain CSV — trivially cheap to parse next
+  to the three XML-based engines, and its matcher never reads policy-row
+  content at all, so its decoy rows are cosmetic regardless of format.
+  AuthzForce's numbers are the whole subprocess wall time (JVM startup +
+  load + eval, inseparable — it has no batch mode, see
+  `semantic-mapping.md`), not a clean load-only figure, so it isn't
+  directly comparable to the other three's load-only column.
+
+  **Caveats, both pointing at the same fix (Step 5B's proper protocol,
+  not built yet):**
+  1. These are single samples per tier, not averaged over repeated
+     iterations.
+  2. The sampled scenario (abac-001) is a **Permit** case — under
+     `permit-overrides`, evaluation can short-circuit the moment a
+     matching Permit rule is found, which for our policies happens within
+     the first few real rules, *before* any decoy is ever reached. That
+     means this sample mostly isn't measuring decoy-scan cost at all. A
+     **Deny** scenario (e.g. abac-004) must scan every remaining rule,
+     including all the decoys, before concluding Deny — that's the
+     scenario that will actually show scan-cost scaling, and it's why
+     SunXACML's `evaluation_ns` looked flat/noisy above: the wrong
+     scenario was sampled for that question.
 - **Step 6 (aggregation + report):** not started.
 
 See `docs/architecture.md` for the implementation architecture and
