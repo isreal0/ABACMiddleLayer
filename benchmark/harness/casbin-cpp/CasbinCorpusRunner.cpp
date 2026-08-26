@@ -64,7 +64,13 @@ int main(int argc, char** argv) {
     std::string corpusCommit = argv[5];
     std::string adapterCommit = argv[6];
 
+    // Enforcer's constructor is what parses model.conf and every row of
+    // policy.csv, so this is genuinely the policy-load cost, not just
+    // object construction.
+    auto loadStart = std::chrono::steady_clock::now();
     casbin::Enforcer enforcer(modelConf, policyCsv);
+    long long policyLoadNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - loadStart).count();
 
     char hostname[256] = {0};
     gethostname(hostname, sizeof(hostname));
@@ -117,6 +123,7 @@ int main(int argc, char** argv) {
         std::string error;
         bool supported = (expected != "NotApplicable");
 
+        auto evalStart = std::chrono::steady_clock::now();
         try {
             bool result = enforcer.Enforce(params);
             actual = result ? "Permit" : "Deny";
@@ -125,6 +132,8 @@ int main(int argc, char** argv) {
             error = e.what();
             supported = false;
         }
+        long long evalNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - evalStart).count();
 
         bool isCorrect = supported && (actual == expected);
         if (supported) {
@@ -144,7 +153,8 @@ int main(int argc, char** argv) {
             << "\"actual\":" << (actual.empty() ? "null" : ("\"" + jsonEscape(actual) + "\"")) << ","
             << "\"supported\":" << (supported ? "true" : "false") << ","
             << "\"correct\":" << (supported ? (isCorrect ? "true" : "false") : "null") << ","
-            << "\"policy_load_ns\":null,\"translation_ns\":null,\"evaluation_ns\":null,\"total_ns\":null,"
+            << "\"policy_load_ns\":" << policyLoadNs << ",\"translation_ns\":null,"
+            << "\"evaluation_ns\":" << evalNs << ",\"total_ns\":" << evalNs << ","
             << "\"error\":" << (error.empty() ? "null" : ("\"" + jsonEscape(error) + "\"")) << ","
             << "\"notes\":" << (supported ? "null" : "\"Casbin has no NotApplicable/Indeterminate concept; Enforce() is strictly boolean\"")
             << "}\n";

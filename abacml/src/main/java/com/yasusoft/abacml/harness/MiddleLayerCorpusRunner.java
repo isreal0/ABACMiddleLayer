@@ -61,6 +61,21 @@ public class MiddleLayerCorpusRunner {
         int correct = 0;
         String runId = "run-" + System.currentTimeMillis();
 
+        // Warm-up call: not counted toward correctness, but its wall time is
+        // policy_load_ns -- Balana parses/loads the policy set lazily on
+        // first use and caches it for the rest of this JVM's lifetime, so
+        // this isolates that one-time cost from the per-scenario evaluation
+        // timings below, which are all "hot" (policy already resident).
+        String[] warmupRow = rows.get(1);
+        long loadStart = System.nanoTime();
+        ABACML.Evaluate_ABAC_Decision(
+                get(warmupRow, col, "subject_id"), emptyToNull(get(warmupRow, col, "subject_role")),
+                emptyToNull(get(warmupRow, col, "subject_department")), parseIntOrNull(get(warmupRow, col, "subject_clearance")),
+                get(warmupRow, col, "resource_id"), emptyToNull(get(warmupRow, col, "resource_owner")),
+                emptyToNull(get(warmupRow, col, "resource_department")), parseIntOrNull(get(warmupRow, col, "resource_classification")),
+                get(warmupRow, col, "action"), emptyToNull(get(warmupRow, col, "env_network")), parseIntOrNull(get(warmupRow, col, "env_hour")));
+        long policyLoadNs = System.nanoTime() - loadStart;
+
         PrintWriter out = new PrintWriter(new FileWriter(outputJsonl));
         try {
             for (int r = 1; r < rows.size(); r++) {
@@ -83,6 +98,7 @@ public class MiddleLayerCorpusRunner {
 
                 String actual;
                 String error = null;
+                long evalStart = System.nanoTime();
                 try {
                     actual = ABACML.Evaluate_ABAC_Decision(
                             subjectId, subjectRole, subjectDept, subjectClearance,
@@ -92,13 +108,15 @@ public class MiddleLayerCorpusRunner {
                     actual = null;
                     error = e.toString();
                 }
+                long evalNs = System.nanoTime() - evalStart;
 
                 boolean isCorrect = actual != null && actual.equals(expected);
                 if (isCorrect) {
                     correct++;
                 }
 
-                out.println(toJsonLine(runId, hostname, corpusCommit, adapterCommit, id, expected, actual, isCorrect, error));
+                out.println(toJsonLine(runId, hostname, corpusCommit, adapterCommit, id, expected, actual, isCorrect, error,
+                        policyLoadNs, evalNs));
             }
         } finally {
             out.close();
@@ -152,7 +170,8 @@ public class MiddleLayerCorpusRunner {
     }
 
     private static String toJsonLine(String runId, String hostname, String corpusCommit, String adapterCommit,
-                                      String scenarioId, String expected, String actual, boolean correct, String error) {
+                                      String scenarioId, String expected, String actual, boolean correct, String error,
+                                      long policyLoadNs, long evalNs) {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"run_id\":").append(jsonString(runId)).append(",");
@@ -166,10 +185,10 @@ public class MiddleLayerCorpusRunner {
         sb.append("\"actual\":").append(jsonString(actual)).append(",");
         sb.append("\"supported\":true,");
         sb.append("\"correct\":").append(correct).append(",");
-        sb.append("\"policy_load_ns\":null,");
+        sb.append("\"policy_load_ns\":").append(policyLoadNs).append(",");
         sb.append("\"translation_ns\":null,");
-        sb.append("\"evaluation_ns\":null,");
-        sb.append("\"total_ns\":null,");
+        sb.append("\"evaluation_ns\":").append(evalNs).append(",");
+        sb.append("\"total_ns\":").append(evalNs).append(",");
         sb.append("\"error\":").append(jsonString(error)).append(",");
         sb.append("\"notes\":null");
         sb.append("}");

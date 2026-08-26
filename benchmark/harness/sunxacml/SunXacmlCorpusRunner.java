@@ -61,7 +61,12 @@ public class SunXacmlCorpusRunner {
         ResourceFinder resourceFinder = new ResourceFinder();
 
         PDPConfig pdpConfig = new PDPConfig(attributeFinder, policyFinder, resourceFinder);
+        // PDP's constructor is what actually triggers PolicyFinder.init(),
+        // which is where FilePolicyModule parses every rule in policy.xml --
+        // so this is genuinely the policy-load cost, not just object setup.
+        long loadStart = System.nanoTime();
         PDP pdp = new PDP(pdpConfig);
+        long policyLoadNs = System.nanoTime() - loadStart;
 
         String hostname = java.net.InetAddress.getLocalHost().getHostName();
         String runId = "run-" + System.currentTimeMillis();
@@ -78,6 +83,7 @@ public class SunXacmlCorpusRunner {
 
                 String actual = null;
                 String error = null;
+                long evalStart = System.nanoTime();
                 try {
                     String requestPath = requestsDir + "/" + id + ".xml";
                     try (FileInputStream fis = new FileInputStream(requestPath)) {
@@ -93,12 +99,14 @@ public class SunXacmlCorpusRunner {
                 } catch (Exception e) {
                     error = e.toString();
                 }
+                long evalNs = System.nanoTime() - evalStart;
 
                 boolean isCorrect = actual != null && actual.equals(expected);
                 if (isCorrect) {
                     correct++;
                 }
-                out.println(toJsonLine(runId, hostname, corpusCommit, adapterCommit, id, expected, actual, isCorrect, error));
+                out.println(toJsonLine(runId, hostname, corpusCommit, adapterCommit, id, expected, actual, isCorrect, error,
+                        policyLoadNs, evalNs));
             }
         }
 
@@ -133,7 +141,8 @@ public class SunXacmlCorpusRunner {
     }
 
     private static String toJsonLine(String runId, String hostname, String corpusCommit, String adapterCommit,
-                                      String scenarioId, String expected, String actual, boolean correct, String error) {
+                                      String scenarioId, String expected, String actual, boolean correct, String error,
+                                      long policyLoadNs, long evalNs) {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"run_id\":").append(jsonString(runId)).append(",");
@@ -147,10 +156,10 @@ public class SunXacmlCorpusRunner {
         sb.append("\"actual\":").append(jsonString(actual)).append(",");
         sb.append("\"supported\":true,");
         sb.append("\"correct\":").append(correct).append(",");
-        sb.append("\"policy_load_ns\":null,");
+        sb.append("\"policy_load_ns\":").append(policyLoadNs).append(",");
         sb.append("\"translation_ns\":null,");
-        sb.append("\"evaluation_ns\":null,");
-        sb.append("\"total_ns\":null,");
+        sb.append("\"evaluation_ns\":").append(evalNs).append(",");
+        sb.append("\"total_ns\":").append(evalNs).append(",");
         sb.append("\"error\":").append(jsonString(error)).append(",");
         sb.append("\"notes\":null");
         sb.append("}");

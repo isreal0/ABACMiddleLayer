@@ -2,19 +2,34 @@
 # Correctness-only execution (Step 5A). Refuses to run until the canonical
 # corpus and the requested engine's adapter actually exist — never fabricates
 # a pass for an unimplemented component.
+#
+# Usage: run-correctness.sh <engine> [scale]
+#   scale: small (default, 0 decoy rules), medium (1000), large (5000) --
+#   see scripts/generate-corpus.py. Decoy rules never match any canonical
+#   scenario, so correctness must be identical across all three tiers; this
+#   is what lets Step 5 answer "does correctness hold at larger policy
+#   sizes" separately from "how much slower is it" (policy_load_ns /
+#   evaluation_ns in the normalized output, populated per engine).
 set -euo pipefail
 
 ENGINE="${1:-}"
+SCALE="${2:-small}"
 VALID_ENGINES="middle-layer sunxacml authzforce casbin-cpp"
+VALID_SCALES="small medium large"
 
 if [ -z "$ENGINE" ]; then
-  echo "usage: $0 <engine>   (one of: $VALID_ENGINES)" >&2
+  echo "usage: $0 <engine> [scale]   (engine: $VALID_ENGINES) (scale: $VALID_SCALES, default small)" >&2
   exit 2
 fi
 
 case " $VALID_ENGINES " in
   *" $ENGINE "*) ;;
   *) echo "error: unknown engine '$ENGINE' (expected one of: $VALID_ENGINES)" >&2; exit 2 ;;
+esac
+
+case " $VALID_SCALES " in
+  *" $SCALE "*) ;;
+  *) echo "error: unknown scale '$SCALE' (expected one of: $VALID_SCALES)" >&2; exit 2 ;;
 esac
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,6 +51,8 @@ mkdir -p "$NORMALIZED_DIR"
 python3 "$HARNESS_DIR/scripts/generate-corpus.py" \
   "$CORPUS_CANONICAL" "$GENERATED_DIR" "$REF_POLICIES_DIR"
 
+OUT_JSONL="$NORMALIZED_DIR/${ENGINE}.${SCALE}.jsonl"
+
 case "$ENGINE" in
   middle-layer)
     REPO_DIR="/opt/abac-research/repo"
@@ -45,9 +62,9 @@ case "$ENGINE" in
     fi
     java -cp "$REPO_DIR/abacml/target/classes:$REPO_DIR/abacml/target/libs/*" \
       com.yasusoft.abacml.harness.MiddleLayerCorpusRunner \
-      "$GENERATED_DIR/middle-layer/policies" \
-      "$GENERATED_DIR/middle-layer/scenarios.tsv" \
-      "$NORMALIZED_DIR/middle-layer.jsonl" \
+      "$GENERATED_DIR/middle-layer/$SCALE/policies" \
+      "$GENERATED_DIR/middle-layer/$SCALE/scenarios.tsv" \
+      "$OUT_JSONL" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
   authzforce)
@@ -59,9 +76,9 @@ case "$ENGINE" in
     fi
     python3 "$HARNESS_DIR/scripts/run-authzforce-correctness.py" \
       "$CLI_JAR" \
-      "$GENERATED_DIR/authzforce" \
+      "$GENERATED_DIR/authzforce/$SCALE" \
       "$CORPUS_CANONICAL" \
-      "$NORMALIZED_DIR/authzforce.jsonl" \
+      "$OUT_JSONL" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
   sunxacml)
@@ -75,10 +92,10 @@ case "$ENGINE" in
     fi
     java -cp "$RUNNER_CLASSES:$SUNXACML_JAR:$JAXB_LIBS/*" \
       SunXacmlCorpusRunner \
-      "$GENERATED_DIR/sunxacml/policy.xml" \
-      "$GENERATED_DIR/sunxacml/requests" \
-      "$GENERATED_DIR/sunxacml/manifest.tsv" \
-      "$NORMALIZED_DIR/sunxacml.jsonl" \
+      "$GENERATED_DIR/sunxacml/$SCALE/policy.xml" \
+      "$GENERATED_DIR/sunxacml/$SCALE/requests" \
+      "$GENERATED_DIR/sunxacml/$SCALE/manifest.tsv" \
+      "$OUT_JSONL" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
   casbin-cpp)
@@ -92,10 +109,10 @@ case "$ENGINE" in
       exit 1
     fi
     "$RUNNER_BIN" \
-      "$GENERATED_DIR/casbin-cpp/model.conf" \
-      "$GENERATED_DIR/casbin-cpp/policy.csv" \
-      "$GENERATED_DIR/casbin-cpp/scenarios.tsv" \
-      "$NORMALIZED_DIR/casbin-cpp.jsonl" \
+      "$GENERATED_DIR/casbin-cpp/$SCALE/model.conf" \
+      "$GENERATED_DIR/casbin-cpp/$SCALE/policy.csv" \
+      "$GENERATED_DIR/casbin-cpp/$SCALE/scenarios.tsv" \
+      "$OUT_JSONL" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
 esac
