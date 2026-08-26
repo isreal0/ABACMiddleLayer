@@ -18,6 +18,7 @@ case " $VALID_ENGINES " in
 esac
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REF_POLICIES_DIR="$HARNESS_DIR/corpus/reference-policies"
 CORPUS_CANONICAL="/opt/abac-research/corpus/canonical/scenarios.json"
 COMMIT_FILE="/opt/abac-research/versions/corpus.commit"
 GENERATED_DIR="/opt/abac-research/corpus/generated"
@@ -29,7 +30,11 @@ if [ ! -f "$COMMIT_FILE" ] || [ ! -f "$CORPUS_CANONICAL" ]; then
 fi
 
 CORPUS_COMMIT="$(cat "$COMMIT_FILE")"
+ADAPTER_COMMIT="$(git -C "$HARNESS_DIR" rev-parse HEAD)"
 mkdir -p "$NORMALIZED_DIR"
+
+python3 "$HARNESS_DIR/scripts/generate-corpus.py" \
+  "$CORPUS_CANONICAL" "$GENERATED_DIR" "$REF_POLICIES_DIR"
 
 case "$ENGINE" in
   middle-layer)
@@ -38,9 +43,6 @@ case "$ENGINE" in
       echo "error: MiddleLayerCorpusRunner not built. Run: (cd $REPO_DIR/abacml && mvn -q -o compile)" >&2
       exit 1
     fi
-    python3 "$HARNESS_DIR/scripts/generate-corpus.py" \
-      "$CORPUS_CANONICAL" "$GENERATED_DIR" "$REPO_DIR/benchmark/corpus/reference-policies"
-    ADAPTER_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD)"
     java -cp "$REPO_DIR/abacml/target/classes:$REPO_DIR/abacml/target/libs/*" \
       com.yasusoft.abacml.harness.MiddleLayerCorpusRunner \
       "$GENERATED_DIR/middle-layer/policies" \
@@ -48,8 +50,22 @@ case "$ENGINE" in
       "$NORMALIZED_DIR/middle-layer.jsonl" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
-  sunxacml|authzforce|casbin-cpp)
-    echo "error: no adapter implemented yet for '$ENGINE' (Step 4 in progress — only middle-layer is done so far)." >&2
+  authzforce)
+    ENGINE_DIR="/opt/abac-research/engine/authzforce-core"
+    CLI_JAR="$(find "$ENGINE_DIR/pdp-cli/target" -maxdepth 1 -name 'authzforce-ce-core-pdp-cli-*.jar' 2>/dev/null | head -1)"
+    if [ -z "$CLI_JAR" ]; then
+      echo "error: AuthzForce CLI jar not found under $ENGINE_DIR/pdp-cli/target (Step 3 build missing?)." >&2
+      exit 1
+    fi
+    python3 "$HARNESS_DIR/scripts/run-authzforce-correctness.py" \
+      "$CLI_JAR" \
+      "$GENERATED_DIR/authzforce" \
+      "$CORPUS_CANONICAL" \
+      "$NORMALIZED_DIR/authzforce.jsonl" \
+      "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
+    ;;
+  sunxacml|casbin-cpp)
+    echo "error: no adapter implemented yet for '$ENGINE' (Step 4 in progress)." >&2
     exit 1
     ;;
 esac
