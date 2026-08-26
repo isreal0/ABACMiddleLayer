@@ -33,11 +33,55 @@ absent from the scenario, e.g. a future missing-attribute scenario):
 """
 import json
 import os
+import random
 import re
 import shutil
 import sys
 
 SCALE_TIERS = {"small": 0, "medium": 1000, "large": 5000}
+
+# Fixed seed so regenerating produces byte-identical decoy content on every
+# VM -- required for the "same corpus commit -> same generated inputs"
+# invariant to actually hold once decoys are randomized (see docs/architecture.md).
+DECOY_RANDOM_SEED = 260825
+
+DECOY_DEPARTMENTS = [
+    "ComputerScience", "Engineering", "Business", "Law", "Medicine", "Psychology",
+    "Chemistry", "Physics", "Mathematics", "Biology", "ArtsAndHumanities",
+    "Architecture", "Nursing", "Pharmacy", "Education",
+]
+DECOY_ROLES = [
+    "student", "lecturer", "ta", "advisor", "admin", "dean", "registrar",
+    "researcher", "postdoc", "technician",
+]
+DECOY_NETWORKS = ["campus", "vpn", "external", "mobile-data", "guest-wifi"]
+DECOY_ACTIONS = ["SELECT", "UPDATE", "DELETE"]
+
+
+def _generate_decoy_specs(num_decoys):
+    """Realistic-looking, structurally varied decoy rules -- three shapes
+    drawn from the same value pools a real multi-department university
+    policy would use (department/role/network/action names, clearance and
+    hour thresholds), not a single never-matching placeholder repeated N
+    times. Always Effect=Deny: under permit-overrides, a Deny-effect decoy
+    can never flip an expected Permit (any matching Permit rule always
+    wins), and every canonical scenario's expected Deny is already the
+    policy's own default -- so these are safe to let coincidentally match
+    a real scenario's attributes, which is what makes them realistic
+    instead of deliberately unreachable. Reproducible via a fixed seed.
+    """
+    rng = random.Random(DECOY_RANDOM_SEED)
+    specs = []
+    shapes = ["role_network", "dept_clearance", "action_hour"]
+    for i in range(num_decoys):
+        shape = shapes[i % 3]
+        if shape == "role_network":
+            specs.append({"shape": shape, "role": rng.choice(DECOY_ROLES), "network": rng.choice(DECOY_NETWORKS)})
+        elif shape == "dept_clearance":
+            specs.append({"shape": shape, "department": rng.choice(DECOY_DEPARTMENTS), "clearance_threshold": rng.randint(1, 4)})
+        else:
+            specs.append({"shape": shape, "action": rng.choice(DECOY_ACTIONS), "hour_threshold": rng.randint(0, 23)})
+    return specs
 
 
 def field(d, key):
@@ -70,48 +114,160 @@ def write_scenarios_tsv(scenarios, tsv_path):
             f.write("\t".join(row) + "\n")
 
 
+def _xacml3_decoy_rule_xml(i, spec):
+    if spec["shape"] == "role_network":
+        target = (
+            '      <AnyOf>\n'
+            '        <AllOf>\n'
+            '          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["role"]}</AttributeValue>\n'
+            '            <AttributeDesignator AttributeId="urn:uoa:canvas:subject:role" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>\n'
+            '          </Match>\n'
+            '        </AllOf>\n'
+            '      </AnyOf>\n'
+        )
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">\n'
+            '          <AttributeDesignator AttributeId="urn:uoa:canvas:environment:network" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["network"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    elif spec["shape"] == "dept_clearance":
+        target = (
+            '      <AnyOf>\n'
+            '        <AllOf>\n'
+            '          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["department"]}</AttributeValue>\n'
+            '            <AttributeDesignator AttributeId="urn:uoa:canvas:resource:department" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>\n'
+            '          </Match>\n'
+            '        </AllOf>\n'
+            '      </AnyOf>\n'
+        )
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-less-than">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">\n'
+            '          <AttributeDesignator AttributeId="urn:uoa:canvas:subject:clearance" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">{spec["clearance_threshold"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    else:  # action_hour
+        target = (
+            '      <AnyOf>\n'
+            '        <AllOf>\n'
+            '          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["action"]}</AttributeValue>\n'
+            '            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>\n'
+            '          </Match>\n'
+            '        </AllOf>\n'
+            '      </AnyOf>\n'
+        )
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">\n'
+            '          <AttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" Category="urn:oasis:names:tc:xacml:3.0:attribute-category:environment" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">{spec["hour_threshold"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    return (
+        f'  <Rule Effect="Deny" RuleId="decoy-{i:05d}">\n'
+        f'    <Target>\n{target}    </Target>\n'
+        f'    <Condition>\n{condition}    </Condition>\n'
+        f'  </Rule>\n'
+    )
+
+
 def _xacml3_decoy_rules(num_decoys):
     if num_decoys == 0:
         return ""
-    rules = []
-    for i in range(num_decoys):
-        rules.append(
-            f'  <Rule Effect="Deny" RuleId="decoy-{i:05d}">\n'
-            f'    <Target>\n'
-            f'      <AnyOf>\n'
-            f'        <AllOf>\n'
-            f'          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
-            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">decoy_subject_{i:05d}</AttributeValue>\n'
-            f'            <AttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id" Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>\n'
-            f'          </Match>\n'
-            f'        </AllOf>\n'
-            f'      </AnyOf>\n'
-            f'    </Target>\n'
-            f'  </Rule>\n'
+    specs = _generate_decoy_specs(num_decoys)
+    return "".join(_xacml3_decoy_rule_xml(i, spec) for i, spec in enumerate(specs))
+
+
+def _xacml2_decoy_rule_xml(i, spec):
+    if spec["shape"] == "role_network":
+        target = (
+            '      <Subjects>\n'
+            '        <Subject>\n'
+            '          <SubjectMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["role"]}</AttributeValue>\n'
+            '            <SubjectAttributeDesignator AttributeId="urn:uoa:canvas:subject:role" DataType="http://www.w3.org/2001/XMLSchema#string"/>\n'
+            '          </SubjectMatch>\n'
+            '        </Subject>\n'
+            '      </Subjects>\n'
         )
-    return "".join(rules)
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">\n'
+            '          <EnvironmentAttributeDesignator AttributeId="urn:uoa:canvas:environment:network" DataType="http://www.w3.org/2001/XMLSchema#string"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["network"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    elif spec["shape"] == "dept_clearance":
+        target = (
+            '      <Resources>\n'
+            '        <Resource>\n'
+            '          <ResourceMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["department"]}</AttributeValue>\n'
+            '            <ResourceAttributeDesignator AttributeId="urn:uoa:canvas:resource:department" DataType="http://www.w3.org/2001/XMLSchema#string"/>\n'
+            '          </ResourceMatch>\n'
+            '        </Resource>\n'
+            '      </Resources>\n'
+        )
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-less-than">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">\n'
+            '          <SubjectAttributeDesignator AttributeId="urn:uoa:canvas:subject:clearance" DataType="http://www.w3.org/2001/XMLSchema#integer"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">{spec["clearance_threshold"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    else:  # action_hour
+        target = (
+            '      <Actions>\n'
+            '        <Action>\n'
+            '          <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
+            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">{spec["action"]}</AttributeValue>\n'
+            '            <ActionAttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id" DataType="http://www.w3.org/2001/XMLSchema#string"/>\n'
+            '          </ActionMatch>\n'
+            '        </Action>\n'
+            '      </Actions>\n'
+        )
+        condition = (
+            '      <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-greater-than-or-equal">\n'
+            '        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-one-and-only">\n'
+            '          <EnvironmentAttributeDesignator AttributeId="urn:uoa:canvas:environment:hour" DataType="http://www.w3.org/2001/XMLSchema#integer"/>\n'
+            '        </Apply>\n'
+            f'        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">{spec["hour_threshold"]}</AttributeValue>\n'
+            '      </Apply>\n'
+        )
+    return (
+        f'  <Rule RuleId="decoy-{i:05d}" Effect="Deny">\n'
+        f'    <Target>\n{target}    </Target>\n'
+        f'    <Condition>\n{condition}    </Condition>\n'
+        f'  </Rule>\n'
+    )
 
 
 def _xacml2_decoy_rules(num_decoys):
     if num_decoys == 0:
         return ""
-    rules = []
-    for i in range(num_decoys):
-        rules.append(
-            f'  <Rule RuleId="decoy-{i:05d}" Effect="Deny">\n'
-            f'    <Target>\n'
-            f'      <Subjects>\n'
-            f'        <Subject>\n'
-            f'          <SubjectMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">\n'
-            f'            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">decoy_subject_{i:05d}</AttributeValue>\n'
-            f'            <SubjectAttributeDesignator AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id" DataType="http://www.w3.org/2001/XMLSchema#string"/>\n'
-            f'          </SubjectMatch>\n'
-            f'        </Subject>\n'
-            f'      </Subjects>\n'
-            f'    </Target>\n'
-            f'  </Rule>\n'
-        )
-    return "".join(rules)
+    specs = _generate_decoy_specs(num_decoys)
+    return "".join(_xacml2_decoy_rule_xml(i, spec) for i, spec in enumerate(specs))
+
+
+def _casbin_decoy_row(i, spec):
+    if spec["shape"] == "role_network":
+        sub, obj, act = f'decoy_{spec["role"]}_{i:05d}', f'decoy_net_{spec["network"]}_{i:05d}', "DECOY"
+    elif spec["shape"] == "dept_clearance":
+        sub, obj, act = f'decoy_clr{spec["clearance_threshold"]}_{i:05d}', f'decoy_{spec["department"]}_{i:05d}', "DECOY"
+    else:
+        sub, obj, act = f'decoy_hr{spec["hour_threshold"]}_{i:05d}', f'decoy_obj_{i:05d}', spec["action"]
+    return f"p, {sub}, {obj}, {act}\n"
 
 
 def _inject_before_closing_policy(policy_xml, decoy_rules_xml):
@@ -154,7 +310,8 @@ def generate_casbin_cpp(scenarios, output_dir, ref_policies_dir):
 
         shutil.copyfile(os.path.join(ref_policies_dir, "casbin-model.conf"), os.path.join(cb_dir, "model.conf"))
 
-        decoy_rows = "".join(f"p, decoy_sub_{i:05d}, decoy_obj_{i:05d}, DECOY\n" for i in range(num_decoys))
+        specs = _generate_decoy_specs(num_decoys)
+        decoy_rows = "".join(_casbin_decoy_row(i, spec) for i, spec in enumerate(specs))
         with open(os.path.join(cb_dir, "policy.csv"), "w", encoding="utf-8") as f:
             f.write(base_policy_csv + decoy_rows)
 
