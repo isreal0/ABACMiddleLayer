@@ -85,3 +85,8 @@ replay_pid*
 
 # Editor swap files
 *.sw[a-z]
+
+# Legacy generated build artifacts (superseded by canonical corpus/generated XACML)
+/abacmlpolicy.xml
+/gpolicy
+/grule
