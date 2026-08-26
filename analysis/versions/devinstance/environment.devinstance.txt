@@ -1,0 +1,46 @@
+captured_at_utc=2026-08-26T07:56:36Z
+=== hostname ===
+devinstance
+=== whoami ===
+ubuntu
+=== lsb_release ===
+No LSB modules are available.
+Distributor ID:	Ubuntu
+Description:	Ubuntu 22.04.2 LTS
+Release:	22.04
+Codename:	jammy
+=== uname ===
+Linux devinstance 5.15.0-186-generic #196-Ubuntu SMP Sat Jun 20 16:09:34 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+=== nproc ===
+8
+=== free ===
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       497Mi       8.2Gi       5.0Mi       7.0Gi        14Gi
+Swap:             0B          0B          0B
+=== df ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda2        30G   15G   14G  52% /
+=== load average ===
+0.03 0.01 0.00 1/216 374025
+=== git ===
+git version 2.34.1
+=== java (if present) ===
+openjdk version "1.8.0_492"
+OpenJDK Runtime Environment (build 1.8.0_492-8u492-ga~us2-0ubuntu1~22.04.1-b09)
+OpenJDK 64-Bit Server VM (build 25.492-b09, mixed mode)
+=== javac (if present) ===
+javac 1.8.0_492
+=== mvn (if present) ===
+[1mApache Maven 3.6.3[m
+Maven home: /usr/share/maven
+Java version: 1.8.0_492, vendor: Private Build, runtime: /usr/lib/jvm/java-8-openjdk-amd64/jre
+Default locale: en_AU, platform encoding: UTF-8
+OS name: "linux", version: "5.15.0-186-generic", arch: "amd64", family: "unix"
+=== gcc/g++ (if present) ===
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+=== cmake (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 29: cmake: command not found
+not installed
+=== psql (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 30: psql: command not found
+not installed

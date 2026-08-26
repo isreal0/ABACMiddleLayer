@@ -1,0 +1,18 @@
+{
+  "engine": "sunxacml",
+  "warmup_iterations": 5,
+  "measured_iterations": 20,
+  "repetitions": 3,
+  "sample_count": 60,
+  "latency_ns": {
+    "min": 744152,
+    "median": 156906301,
+    "mean": 101240770,
+    "p95": 174167862,
+    "p99": 247117426,
+    "max": 247117426,
+    "stddev": 81412634
+  },
+  "throughput_per_sec": 9.877443666907718,
+  "peak_rss_kb": 584352
+}

@@ -1,0 +1,19 @@
+{
+  "engine": "authzforce",
+  "warmup_iterations": 5,
+  "measured_iterations": 20,
+  "repetitions": 3,
+  "sample_count": 60,
+  "latency_ns": {
+    "min": 1326787697,
+    "median": 1383295589.0,
+    "mean": 1390875530,
+    "p95": 1446181484,
+    "p99": 1509460548,
+    "max": 1509460548,
+    "stddev": 36859950
+  },
+  "throughput_per_sec": 0.7189715963611742,
+  "peak_rss_kb": 12424,
+  "notes": "total_ns includes JVM startup + policy load + evaluation, inseparable (CLI has no batch mode)"
+}

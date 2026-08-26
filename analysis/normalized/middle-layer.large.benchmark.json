@@ -1,0 +1,18 @@
+{
+  "engine": "middle-layer",
+  "warmup_iterations": 5,
+  "measured_iterations": 20,
+  "repetitions": 3,
+  "sample_count": 60,
+  "latency_ns": {
+    "min": 189742214,
+    "median": 200709233,
+    "mean": 228024538,
+    "p95": 310840381,
+    "p99": 413431404,
+    "max": 413431404,
+    "stddev": 49817014
+  },
+  "throughput_per_sec": 4.38549293546487,
+  "peak_rss_kb": 1351892
+}

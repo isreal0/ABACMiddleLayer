@@ -1,0 +1,18 @@
+{
+  "engine": "casbin-cpp",
+  "warmup_iterations": 5,
+  "measured_iterations": 20,
+  "repetitions": 3,
+  "sample_count": 60,
+  "latency_ns": {
+    "min": 58711,
+    "median": 7099419,
+    "mean": 5076880,
+    "p95": 7184200,
+    "p99": 11749375,
+    "max": 11749375,
+    "stddev": 3330313
+  },
+  "throughput_per_sec": 196.971,
+  "peak_rss_kb": 7712
+}

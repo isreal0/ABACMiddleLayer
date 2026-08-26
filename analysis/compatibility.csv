@@ -1,0 +1,11 @@
+scenario_id,middle_layer,sunxacml,authzforce,casbin_cpp,semantic_equivalence,limitation,adapter_notes
+abac-001,Permit,Permit,Permit,Permit,full,,role-based rule (admin override)
+abac-002,Permit,Permit,Permit,Permit,full,,owner-based rule
+abac-003,Permit,Permit,Permit,Permit,full,,department + numeric clearance comparison (lecturer)
+abac-004,Deny,Deny,Deny,Deny,full,,department mismatch
+abac-005,Deny,Deny,Deny,Deny,full,,insufficient clearance
+abac-006,Deny,Deny,Deny,Deny,full,,not resource owner
+abac-007,Deny,Deny,Deny,Deny,full,,network condition (off-campus)
+abac-008,Deny,Deny,Deny,Deny,full,,time-of-day condition (outside business hours)
+abac-009,Deny,Deny,Deny,Deny,full,,set-membership on action (DELETE not in permitted set)
+abac-010,NotApplicable,NotApplicable,NotApplicable,Deny (unsupported),partial,"Casbin-CPP has no NotApplicable/Indeterminate concept -- Enforce() is strictly boolean (confirmed from include/casbin/enforcer_interface.h); this scenario is marked supported=false for casbin-cpp rather than compared","action outside the policy's own Target scope (TRUNCATE not in {SELECT,UPDATE,DELETE})"

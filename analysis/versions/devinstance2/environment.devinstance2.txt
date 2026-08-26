@@ -1,0 +1,44 @@
+captured_at_utc=2026-08-26T07:56:54Z
+=== hostname ===
+devinstance2
+=== whoami ===
+ubuntu
+=== lsb_release ===
+No LSB modules are available.
+Distributor ID:	Ubuntu
+Description:	Ubuntu 22.04.2 LTS
+Release:	22.04
+Codename:	jammy
+=== uname ===
+Linux devinstance2 5.15.0-69-generic #76-Ubuntu SMP Fri Mar 17 17:19:29 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux
+=== nproc ===
+8
+=== free ===
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       239Mi        14Gi       4.0Mi       1.1Gi        15Gi
+Swap:             0B          0B          0B
+=== df ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda2        30G  3.5G   25G  13% /
+=== load average ===
+0.16 0.03 0.01 1/192 8129
+=== git ===
+git version 2.34.1
+=== java (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 25: java: command not found
+not installed
+=== javac (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 26: javac: command not found
+not installed
+=== mvn (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 27: mvn: command not found
+not installed
+=== gcc/g++ (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 28: gcc: command not found
+not installed
+=== cmake (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 29: cmake: command not found
+not installed
+=== psql (if present) ===
+/opt/abac-research/harness/scripts/capture-environment.sh: line 30: psql: command not found
+not installed

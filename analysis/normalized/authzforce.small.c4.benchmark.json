@@ -1,0 +1,20 @@
+{
+  "engine": "authzforce",
+  "concurrency": 4,
+  "warmup_iterations": 5,
+  "measured_iterations_per_worker": 20,
+  "repetitions": 3,
+  "sample_count": 240,
+  "latency_ns": {
+    "min": 1461769790,
+    "median": 2649484555.0,
+    "mean": 2636903133,
+    "p95": 2997678850,
+    "p99": 3167367639,
+    "max": 3219300890,
+    "stddev": 274029390
+  },
+  "aggregate_throughput_per_sec": 1.4896767221121685,
+  "peak_rss_kb": 13868,
+  "notes": "total_ns includes JVM startup + policy load + evaluation, inseparable (CLI has no batch mode); peak_rss_kb is this Python orchestrator's own RSS, not the Java subprocesses' -- known measurement limitation, see semantic-mapping.md"
+}

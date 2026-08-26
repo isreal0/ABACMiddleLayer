@@ -1,0 +1,20 @@
+{
+  "engine": "casbin-cpp",
+  "concurrency": 1,
+  "warmup_iterations": 5,
+  "measured_iterations_per_worker": 20,
+  "repetitions": 3,
+  "sample_count": 60,
+  "latency_ns": {
+    "min": 133081,
+    "median": 136661.0,
+    "mean": 187483,
+    "p95": 210402,
+    "p99": 1120231,
+    "max": 1120231,
+    "stddev": 200805
+  },
+  "aggregate_throughput_per_sec": 2402.9464927665585,
+  "peak_rss_kb": 13052,
+  "notes": "concurrency = independent OS processes, not threads sharing one Enforcer -- casbin::Enforcer segfaults under concurrent thread access even with one instance per thread (confirmed empirically); peak_rss_kb is this Python orchestrator's own RSS, not the worker processes', see semantic-mapping.md"
+}

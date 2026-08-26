@@ -1,0 +1,328 @@
+[INFO] Scanning for projects...
+[INFO] Inspecting build with total of 5 modules
+[INFO] Installing Central Publishing features
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] org.ow2.authzforce:authzforce-ce-core                              [pom]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-engine                   [jar]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json            [jar]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-testutils                [jar]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-cli                      [jar]
+[INFO] 
+[INFO] ---------------< org.ow2.authzforce:authzforce-ce-core >----------------
+[INFO] Building org.ow2.authzforce:authzforce-ce-core 21.2.1-SNAPSHOT     [1/5]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.7.0:tree (default-cli) @ authzforce-ce-core ---
+[INFO] org.ow2.authzforce:authzforce-ce-core:pom:21.2.1-SNAPSHOT
+[INFO] 
+[INFO] ----------< org.ow2.authzforce:authzforce-ce-core-pdp-engine >----------
+[INFO] Building org.ow2.authzforce:authzforce-ce-core-pdp-engine 21.2.1-SNAPSHOT [2/5]
+[INFO]   from pdp-engine/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.7.0:tree (default-cli) @ authzforce-ce-core-pdp-engine ---
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-engine:jar:21.2.1-SNAPSHOT
+[INFO] +- org.slf4j:jcl-over-slf4j:jar:2.0.17:compile
+[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.17:compile
+[INFO] +- org.eclipse.angus:jakarta.mail:jar:2.0.5:compile
+[INFO] |  +- jakarta.activation:jakarta.activation-api:jar:2.1.4:compile
+[INFO] |  \- org.eclipse.angus:angus-activation:jar:2.0.3:runtime
+[INFO] +- org.springframework:spring-core:jar:7.0.9:compile
+[INFO] |  \- org.jspecify:jspecify:jar:1.0.0:compile
+[INFO] +- xml-resolver:xml-resolver:jar:1.2:compile
+[INFO] +- org.glassfish.jaxb:jaxb-runtime:jar:4.0.6:runtime
+[INFO] |  \- org.glassfish.jaxb:jaxb-core:jar:4.0.6:compile
+[INFO] |     +- jakarta.xml.bind:jakarta.xml.bind-api:jar:4.0.4:compile
+[INFO] |     +- org.glassfish.jaxb:txw2:jar:4.0.6:compile
+[INFO] |     \- com.sun.istack:istack-commons-runtime:jar:4.1.2:compile
+[INFO] +- com.google.code.findbugs:jsr305:jar:3.0.2:compile
+[INFO] +- org.ow2.authzforce:authzforce-ce-core-pdp-api:jar:22.2.0:compile
+[INFO] |  +- org.jetbrains:annotations:jar:26.1.0:compile
+[INFO] |  +- net.sf.saxon:Saxon-HE:jar:12.10:compile
+[INFO] |  |  +- org.xmlresolver:xmlresolver:jar:5.3.3:compile
+[INFO] |  |  \- org.xmlresolver:xmlresolver:jar:data:5.3.3:compile
+[INFO] |  +- com.google.guava:guava:jar:33.5.0-jre:compile
+[INFO] |  |  +- com.google.guava:failureaccess:jar:1.0.3:compile
+[INFO] |  |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+[INFO] |  |  +- com.google.errorprone:error_prone_annotations:jar:2.41.0:compile
+[INFO] |  |  \- com.google.j2objc:j2objc-annotations:jar:3.1:compile
+[INFO] |  +- org.ow2.authzforce:authzforce-ce-xacml-model:jar:9.3.0:compile
+[INFO] |  |  +- org.ow2.authzforce:authzforce-ce-xmlns-model:jar:9.3.0:compile
+[INFO] |  |  \- org.jvnet.jaxb:jaxb-plugins-runtime:jar:4.0.12:compile
+[INFO] |  \- org.ow2.authzforce:authzforce-ce-pdp-ext-model:jar:9.3.0:compile
+[INFO] +- ch.qos.logback:logback-classic:jar:1.5.38:test
+[INFO] |  \- ch.qos.logback:logback-core:jar:1.5.38:test
+[INFO] \- junit:junit:jar:4.13.2:test
+[INFO]    \- org.hamcrest:hamcrest-core:jar:1.3:test
+[INFO] 
+[INFO] ------< org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json >-------
+[INFO] Building org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json 21.2.1-SNAPSHOT [3/5]
+[INFO]   from pdp-io-xacml-json/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.7.0:tree (default-cli) @ authzforce-ce-core-pdp-io-xacml-json ---
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json:jar:21.2.1-SNAPSHOT
+[INFO] +- org.ow2.authzforce:authzforce-ce-xacml-json-model:jar:4.2.0:compile
+[INFO] |  +- org.springframework:spring-core:jar:7.0.9:compile
+[INFO] |  |  \- org.jspecify:jspecify:jar:1.0.0:compile
+[INFO] |  \- com.github.erosb:everit-json-schema:jar:1.14.6:compile
+[INFO] |     +- org.json:json:jar:20250107:compile
+[INFO] |     +- commons-validator:commons-validator:jar:1.9.0:compile
+[INFO] |     |  +- commons-digester:commons-digester:jar:2.1:compile
+[INFO] |     |  +- commons-logging:commons-logging:jar:1.3.2:compile
+[INFO] |     |  \- commons-collections:commons-collections:jar:3.2.2:compile
+[INFO] |     +- com.damnhandy:handy-uri-templates:jar:2.1.8:compile
+[INFO] |     |  \- joda-time:joda-time:jar:2.10.2:compile
+[INFO] |     \- com.google.re2j:re2j:jar:1.8:compile
+[INFO] \- org.ow2.authzforce:authzforce-ce-core-pdp-api:jar:22.2.0:compile
+[INFO]    +- org.jetbrains:annotations:jar:26.1.0:compile
+[INFO]    +- org.slf4j:slf4j-api:jar:2.0.17:compile
+[INFO]    +- net.sf.saxon:Saxon-HE:jar:12.10:compile
+[INFO]    |  +- org.xmlresolver:xmlresolver:jar:5.3.3:compile
+[INFO]    |  \- org.xmlresolver:xmlresolver:jar:data:5.3.3:compile
+[INFO]    +- com.google.guava:guava:jar:33.5.0-jre:compile
+[INFO]    |  +- com.google.guava:failureaccess:jar:1.0.3:compile
+[INFO]    |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+[INFO]    |  +- com.google.errorprone:error_prone_annotations:jar:2.41.0:compile
+[INFO]    |  \- com.google.j2objc:j2objc-annotations:jar:3.1:compile
+[INFO]    +- org.ow2.authzforce:authzforce-ce-xacml-model:jar:9.3.0:compile
+[INFO]    |  +- org.ow2.authzforce:authzforce-ce-xmlns-model:jar:9.3.0:compile
+[INFO]    |  +- org.jvnet.jaxb:jaxb-plugins-runtime:jar:4.0.12:compile
+[INFO]    |  |  \- org.glassfish.jaxb:jaxb-core:jar:4.0.6:compile
+[INFO]    |  |     +- org.eclipse.angus:angus-activation:jar:2.0.3:runtime
+[INFO]    |  |     +- org.glassfish.jaxb:txw2:jar:4.0.6:compile
+[INFO]    |  |     \- com.sun.istack:istack-commons-runtime:jar:4.1.2:compile
+[INFO]    |  \- jakarta.xml.bind:jakarta.xml.bind-api:jar:4.0.4:compile
+[INFO]    |     \- jakarta.activation:jakarta.activation-api:jar:2.1.4:compile
+[INFO]    \- org.ow2.authzforce:authzforce-ce-pdp-ext-model:jar:9.3.0:compile
+[INFO] 
+[INFO] --------< org.ow2.authzforce:authzforce-ce-core-pdp-testutils >---------
+[INFO] Building org.ow2.authzforce:authzforce-ce-core-pdp-testutils 21.2.1-SNAPSHOT [4/5]
+[INFO]   from pdp-testutils/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.7.0:tree (default-cli) @ authzforce-ce-core-pdp-testutils ---
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-testutils:jar:21.2.1-SNAPSHOT
+[INFO] +- org.ow2.authzforce:authzforce-ce-core-pdp-engine:jar:21.2.1-SNAPSHOT:compile
+[INFO] |  +- org.slf4j:jcl-over-slf4j:jar:2.0.17:compile
+[INFO] |  +- org.eclipse.angus:jakarta.mail:jar:2.0.5:compile
+[INFO] |  |  \- jakarta.activation:jakarta.activation-api:jar:2.1.4:compile
+[INFO] |  +- org.springframework:spring-core:jar:7.0.9:compile
+[INFO] |  |  \- org.jspecify:jspecify:jar:1.0.0:compile
+[INFO] |  +- xml-resolver:xml-resolver:jar:1.2:compile
+[INFO] |  +- org.glassfish.jaxb:jaxb-runtime:jar:4.0.6:runtime
+[INFO] |  |  \- org.glassfish.jaxb:jaxb-core:jar:4.0.6:compile
+[INFO] |  |     +- org.glassfish.jaxb:txw2:jar:4.0.6:compile
+[INFO] |  |     \- com.sun.istack:istack-commons-runtime:jar:4.1.2:compile
+[INFO] |  +- com.google.code.findbugs:jsr305:jar:3.0.2:compile
+[INFO] |  \- org.ow2.authzforce:authzforce-ce-core-pdp-api:jar:22.2.0:compile
+[INFO] |     +- org.jetbrains:annotations:jar:26.1.0:compile
+[INFO] |     +- net.sf.saxon:Saxon-HE:jar:12.10:compile
+[INFO] |     |  +- org.xmlresolver:xmlresolver:jar:5.3.3:compile
+[INFO] |     |  \- org.xmlresolver:xmlresolver:jar:data:5.3.3:compile
+[INFO] |     +- com.google.guava:guava:jar:33.5.0-jre:compile
+[INFO] |     |  +- com.google.guava:failureaccess:jar:1.0.3:compile
+[INFO] |     |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+[INFO] |     |  +- com.google.errorprone:error_prone_annotations:jar:2.41.0:compile
+[INFO] |     |  \- com.google.j2objc:j2objc-annotations:jar:3.1:compile
+[INFO] |     +- org.ow2.authzforce:authzforce-ce-xacml-model:jar:9.3.0:compile
+[INFO] |     |  +- org.ow2.authzforce:authzforce-ce-xmlns-model:jar:9.3.0:compile
+[INFO] |     |  \- org.jvnet.jaxb:jaxb-plugins-runtime:jar:4.0.12:compile
+[INFO] |     \- org.ow2.authzforce:authzforce-ce-pdp-ext-model:jar:9.3.0:compile
+[INFO] +- org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json:jar:21.2.1-SNAPSHOT:compile
+[INFO] |  \- org.ow2.authzforce:authzforce-ce-xacml-json-model:jar:4.2.0:compile
+[INFO] |     \- com.github.erosb:everit-json-schema:jar:1.14.6:compile
+[INFO] |        +- org.json:json:jar:20250107:compile
+[INFO] |        +- commons-validator:commons-validator:jar:1.9.0:compile
+[INFO] |        |  +- commons-digester:commons-digester:jar:2.1:compile
+[INFO] |        |  +- commons-logging:commons-logging:jar:1.3.2:compile
+[INFO] |        |  \- commons-collections:commons-collections:jar:3.2.2:compile
+[INFO] |        +- com.damnhandy:handy-uri-templates:jar:2.1.8:compile
+[INFO] |        |  \- joda-time:joda-time:jar:2.10.2:compile
+[INFO] |        \- com.google.re2j:re2j:jar:1.8:compile
+[INFO] +- org.mongodb:mongodb-driver-sync:jar:5.10.0:compile
+[INFO] |  +- org.mongodb:bson:jar:5.10.0:compile
+[INFO] |  \- org.mongodb:mongodb-driver-core:jar:5.10.0:compile
+[INFO] |     \- org.mongodb:bson-record-codec:jar:5.10.0:runtime
+[INFO] +- com.github.spotbugs:spotbugs-annotations:jar:4.9.8:compile (optional)
+[INFO] +- junit:junit:jar:4.13.2:test
+[INFO] |  \- org.hamcrest:hamcrest-core:jar:1.3:test
+[INFO] +- ch.qos.logback:logback-classic:jar:1.5.38:test
+[INFO] |  +- ch.qos.logback:logback-core:jar:1.5.38:test
+[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.17:compile
+[INFO] +- org.apache.cxf:cxf-rt-frontend-jaxws:jar:4.2.3:test
+[INFO] |  +- org.ow2.asm:asm:jar:9.10.1:test
+[INFO] |  +- org.apache.cxf:cxf-core:jar:4.2.3:test
+[INFO] |  |  +- jakarta.annotation:jakarta.annotation-api:jar:3.0.0:test
+[INFO] |  |  +- com.fasterxml.woodstox:woodstox-core:jar:7.2.1:test
+[INFO] |  |  |  \- org.codehaus.woodstox:stax2-api:jar:4.3.0:test
+[INFO] |  |  \- org.apache.ws.xmlschema:xmlschema-core:jar:2.3.2:test
+[INFO] |  +- org.apache.cxf:cxf-rt-bindings-soap:jar:4.2.3:test
+[INFO] |  |  \- org.apache.cxf:cxf-rt-databinding-jaxb:jar:4.2.3:test
+[INFO] |  +- org.apache.cxf:cxf-rt-bindings-xml:jar:4.2.3:test
+[INFO] |  +- org.apache.cxf:cxf-rt-frontend-simple:jar:4.2.3:test
+[INFO] |  |  \- org.eclipse.angus:angus-mail:jar:2.0.5:test
+[INFO] |  +- org.apache.cxf:cxf-rt-ws-addr:jar:4.2.3:test
+[INFO] |  |  \- org.apache.cxf:cxf-rt-ws-policy:jar:4.2.3:test
+[INFO] |  |     \- org.apache.neethi:neethi:jar:3.2.3:test
+[INFO] |  \- org.eclipse.angus:angus-activation:jar:2.0.3:runtime
+[INFO] +- org.springframework:spring-context:jar:7.0.9:test
+[INFO] |  +- org.springframework:spring-aop:jar:7.0.9:test
+[INFO] |  +- org.springframework:spring-beans:jar:7.0.9:test
+[INFO] |  +- org.springframework:spring-expression:jar:7.0.9:test
+[INFO] |  \- io.micrometer:micrometer-observation:jar:1.16.7:test
+[INFO] |     \- io.micrometer:micrometer-commons:jar:1.16.7:test
+[INFO] +- jakarta.xml.ws:jakarta.xml.ws-api:jar:4.0.3:provided
+[INFO] |  +- jakarta.xml.bind:jakarta.xml.bind-api:jar:4.0.4:compile
+[INFO] |  \- jakarta.xml.soap:jakarta.xml.soap-api:jar:3.0.2:provided
+[INFO] +- org.apache.cxf:cxf-rt-transports-http-jetty:jar:4.2.3:test
+[INFO] |  +- org.apache.cxf:cxf-rt-transports-http:jar:4.2.3:test
+[INFO] |  +- org.eclipse.jetty:jetty-session:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty.ee11:jetty-ee11-servlet:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty:jetty-server:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty:jetty-util:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty:jetty-io:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty:jetty-security:jar:12.1.11:test
+[INFO] |  +- org.eclipse.jetty:jetty-http:jar:12.1.11:test
+[INFO] |  \- jakarta.servlet:jakarta.servlet-api:jar:6.1.0:test
+[INFO] +- org.apache.cxf.services.sts:cxf-services-sts-core:jar:4.2.3:test
+[INFO] |  +- org.apache.cxf:cxf-rt-ws-security:jar:4.2.3:test
+[INFO] |  |  +- org.apache.cxf:cxf-rt-security-saml:jar:4.2.3:test
+[INFO] |  |  +- org.ehcache:ehcache:jar:jakarta:3.12.0:test
+[INFO] |  |  |  \- javax.cache:cache-api:jar:1.1.0:test
+[INFO] |  |  +- org.apache.wss4j:wss4j-ws-security-dom:jar:4.0.1:test
+[INFO] |  |  +- org.apache.wss4j:wss4j-policy:jar:4.0.1:test
+[INFO] |  |  +- org.apache.wss4j:wss4j-ws-security-stax:jar:4.0.1:test
+[INFO] |  |  |  \- org.apache.wss4j:wss4j-bindings:jar:4.0.1:test
+[INFO] |  |  +- com.sun.xml.messaging.saaj:saaj-impl:jar:3.0.6:test
+[INFO] |  |  |  \- org.jvnet.staxex:stax-ex:jar:2.1.0:test
+[INFO] |  |  +- org.apache.wss4j:wss4j-ws-security-policy-stax:jar:4.0.1:test
+[INFO] |  |  \- org.apache.wss4j:wss4j-ws-security-common:jar:4.0.1:test
+[INFO] |  |     +- org.apache.santuario:xmlsec:jar:4.0.4:test
+[INFO] |  |     |  \- commons-codec:commons-codec:jar:1.18.0:test
+[INFO] |  |     +- org.opensaml:opensaml-saml-impl:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-core-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-core-impl:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-profile-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-saml-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-security-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-security-impl:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-soap-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-xmlsec-api:jar:5.1.6:test
+[INFO] |  |     |  +- org.opensaml:opensaml-xmlsec-impl:jar:5.1.6:test
+[INFO] |  |     |  +- net.shibboleth:shib-security:jar:9.1.6:test
+[INFO] |  |     |  +- net.shibboleth:shib-networking:jar:9.1.6:test
+[INFO] |  |     |  |  \- org.apache.httpcomponents.client5:httpclient5-cache:jar:5.3.1:test
+[INFO] |  |     |  +- net.shibboleth:shib-velocity:jar:9.1.6:test
+[INFO] |  |     |  +- org.apache.httpcomponents.client5:httpclient5:jar:5.3.1:test
+[INFO] |  |     |  |  \- org.apache.httpcomponents.core5:httpcore5-h2:jar:5.2.4:test
+[INFO] |  |     |  +- org.apache.httpcomponents.core5:httpcore5:jar:5.2.5:test
+[INFO] |  |     |  \- net.shibboleth:shib-support:jar:9.1.6:test
+[INFO] |  |     +- org.cryptacular:cryptacular:jar:1.2.7:test
+[INFO] |  |     +- org.opensaml:opensaml-xacml-impl:jar:5.1.6:test
+[INFO] |  |     |  \- org.opensaml:opensaml-xacml-api:jar:5.1.6:test
+[INFO] |  |     +- org.opensaml:opensaml-xacml-saml-impl:jar:5.1.6:test
+[INFO] |  |     |  \- org.opensaml:opensaml-xacml-saml-api:jar:5.1.6:test
+[INFO] |  |     \- org.jasypt:jasypt:jar:1.9.3:test
+[INFO] |  \- org.apache.cxf:cxf-rt-rs-security-jose:jar:4.2.3:test
+[INFO] |     +- org.apache.cxf:cxf-rt-security:jar:4.2.3:test
+[INFO] |     \- org.apache.cxf:cxf-rt-rs-json-basic:jar:4.2.3:test
+[INFO] +- org.apache.cxf:cxf-testutils:jar:4.2.3:test
+[INFO] |  +- org.apache.cxf:cxf-rt-wsdl:jar:4.2.3:test
+[INFO] |  |  \- wsdl4j:wsdl4j:jar:1.6.3:test
+[INFO] |  \- jakarta.mail:jakarta.mail-api:jar:2.1.5:test
+[INFO] +- de.bwaldvogel:mongo-java-server:jar:1.47.0:test
+[INFO] |  +- de.bwaldvogel:mongo-java-server-core:jar:1.47.0:test
+[INFO] |  |  +- io.netty:netty-transport:jar:4.2.2.Final:test
+[INFO] |  |  |  +- io.netty:netty-common:jar:4.2.2.Final:test
+[INFO] |  |  |  +- io.netty:netty-buffer:jar:4.2.2.Final:test
+[INFO] |  |  |  \- io.netty:netty-resolver:jar:4.2.2.Final:test
+[INFO] |  |  +- io.netty:netty-codec:jar:4.2.2.Final:test
+[INFO] |  |  |  +- io.netty:netty-codec-base:jar:4.2.2.Final:test
+[INFO] |  |  |  +- io.netty:netty-codec-compression:jar:4.2.2.Final:test
+[INFO] |  |  |  +- io.netty:netty-codec-protobuf:jar:4.2.2.Final:test
+[INFO] |  |  |  \- io.netty:netty-codec-marshalling:jar:4.2.2.Final:test
+[INFO] |  |  \- io.netty:netty-handler:jar:4.2.2.Final:test
+[INFO] |  |     \- io.netty:netty-transport-native-unix-common:jar:4.2.2.Final:test
+[INFO] |  \- de.bwaldvogel:mongo-java-server-memory-backend:jar:1.47.0:test
+[INFO] \- org.testng:testng:jar:7.8.0:test
+[INFO]    +- com.beust:jcommander:jar:1.82:test
+[INFO]    \- org.webjars:jquery:jar:3.6.1:test
+[INFO] 
+[INFO] -----------< org.ow2.authzforce:authzforce-ce-core-pdp-cli >------------
+[INFO] Building org.ow2.authzforce:authzforce-ce-core-pdp-cli 21.2.1-SNAPSHOT [5/5]
+[INFO]   from pdp-cli/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.7.0:tree (default-cli) @ authzforce-ce-core-pdp-cli ---
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-cli:jar:21.2.1-SNAPSHOT
+[INFO] +- info.picocli:picocli:jar:4.7.5:compile
+[INFO] +- ch.qos.logback:logback-classic:jar:1.6.3:compile
+[INFO] |  +- ch.qos.logback:logback-core:jar:1.6.3:compile
+[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.17:compile
+[INFO] +- org.ow2.authzforce:authzforce-ce-core-pdp-engine:jar:21.2.1-SNAPSHOT:compile
+[INFO] |  +- org.slf4j:jcl-over-slf4j:jar:2.0.17:compile
+[INFO] |  +- org.eclipse.angus:jakarta.mail:jar:2.0.5:compile
+[INFO] |  |  +- jakarta.activation:jakarta.activation-api:jar:2.1.4:compile
+[INFO] |  |  \- org.eclipse.angus:angus-activation:jar:2.0.3:runtime
+[INFO] |  +- org.springframework:spring-core:jar:7.0.9:compile
+[INFO] |  |  \- org.jspecify:jspecify:jar:1.0.0:compile
+[INFO] |  +- xml-resolver:xml-resolver:jar:1.2:compile
+[INFO] |  +- org.glassfish.jaxb:jaxb-runtime:jar:4.0.6:runtime
+[INFO] |  |  \- org.glassfish.jaxb:jaxb-core:jar:4.0.6:compile
+[INFO] |  |     +- jakarta.xml.bind:jakarta.xml.bind-api:jar:4.0.4:compile
+[INFO] |  |     +- org.glassfish.jaxb:txw2:jar:4.0.6:compile
+[INFO] |  |     \- com.sun.istack:istack-commons-runtime:jar:4.1.2:compile
+[INFO] |  +- com.google.code.findbugs:jsr305:jar:3.0.2:compile
+[INFO] |  \- org.ow2.authzforce:authzforce-ce-core-pdp-api:jar:22.2.0:compile
+[INFO] |     +- org.jetbrains:annotations:jar:26.1.0:compile
+[INFO] |     +- net.sf.saxon:Saxon-HE:jar:12.10:compile
+[INFO] |     |  +- org.xmlresolver:xmlresolver:jar:5.3.3:compile
+[INFO] |     |  \- org.xmlresolver:xmlresolver:jar:data:5.3.3:compile
+[INFO] |     +- com.google.guava:guava:jar:33.5.0-jre:compile
+[INFO] |     |  +- com.google.guava:failureaccess:jar:1.0.3:compile
+[INFO] |     |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+[INFO] |     |  +- com.google.errorprone:error_prone_annotations:jar:2.41.0:compile
+[INFO] |     |  \- com.google.j2objc:j2objc-annotations:jar:3.1:compile
+[INFO] |     +- org.ow2.authzforce:authzforce-ce-xacml-model:jar:9.3.0:compile
+[INFO] |     |  +- org.ow2.authzforce:authzforce-ce-xmlns-model:jar:9.3.0:compile
+[INFO] |     |  \- org.jvnet.jaxb:jaxb-plugins-runtime:jar:4.0.12:compile
+[INFO] |     \- org.ow2.authzforce:authzforce-ce-pdp-ext-model:jar:9.3.0:compile
+[INFO] +- org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json:jar:21.2.1-SNAPSHOT:compile
+[INFO] |  \- org.ow2.authzforce:authzforce-ce-xacml-json-model:jar:4.2.0:compile
+[INFO] |     \- com.github.erosb:everit-json-schema:jar:1.14.6:compile
+[INFO] |        +- org.json:json:jar:20250107:compile
+[INFO] |        +- commons-validator:commons-validator:jar:1.9.0:compile
+[INFO] |        |  +- commons-digester:commons-digester:jar:2.1:compile
+[INFO] |        |  +- commons-logging:commons-logging:jar:1.3.2:compile
+[INFO] |        |  \- commons-collections:commons-collections:jar:3.2.2:compile
+[INFO] |        +- com.damnhandy:handy-uri-templates:jar:2.1.8:compile
+[INFO] |        |  \- joda-time:joda-time:jar:2.10.2:compile
+[INFO] |        \- com.google.re2j:re2j:jar:1.8:compile
+[INFO] +- junit:junit:jar:4.13.2:test
+[INFO] |  \- org.hamcrest:hamcrest-core:jar:1.3:test
+[INFO] +- org.testng:testng:jar:7.8.0:test
+[INFO] |  +- com.beust:jcommander:jar:1.82:test
+[INFO] |  \- org.webjars:jquery:jar:3.6.1:test
+[INFO] \- org.ow2.authzforce:authzforce-ce-core-pdp-testutils:jar:21.2.1-SNAPSHOT:test
+[INFO]    \- org.mongodb:mongodb-driver-sync:jar:5.10.0:test
+[INFO]       +- org.mongodb:bson:jar:5.10.0:test
+[INFO]       \- org.mongodb:mongodb-driver-core:jar:5.10.0:test
+[INFO]          \- org.mongodb:bson-record-codec:jar:5.10.0:test
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for org.ow2.authzforce:authzforce-ce-core 21.2.1-SNAPSHOT:
+[INFO] 
+[INFO] org.ow2.authzforce:authzforce-ce-core .............. SUCCESS [  0.440 s]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-engine ... SUCCESS [  0.160 s]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-io-xacml-json SUCCESS [  0.022 s]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-testutils  SUCCESS [  0.235 s]
+[INFO] org.ow2.authzforce:authzforce-ce-core-pdp-cli ...... SUCCESS [  0.296 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.489 s
+[INFO] Finished at: 2026-08-26T20:32:26+12:00
+[INFO] ------------------------------------------------------------------------

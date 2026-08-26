@@ -1,0 +1,5 @@
+hostname,ip,purpose,os,vcpus,ram_gib,disk_gib,checked_at_utc
+devinstance,130.216.217.124,ABAC Middle Layer under evaluation,Ubuntu 22.04.2 LTS (jammy),8,16,30,2026-08-26T07:14:31Z
+devinstance2,130.216.216.210,SunXACML baseline,Ubuntu 22.04.2 LTS (jammy),8,16,30,2026-08-26T07:14:32Z
+devinstance3,130.216.217.221,AuthzForce Core baseline,Ubuntu 22.04.2 LTS (jammy),8,16,30,2026-08-26T07:14:30Z
+devinstance4,130.216.216.147,Casbin-CPP baseline,Ubuntu 22.04.2 LTS (jammy),8,16,30,2026-08-26T07:14:31Z
