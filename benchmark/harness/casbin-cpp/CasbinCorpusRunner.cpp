@@ -22,8 +22,10 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <unistd.h>
 
@@ -129,7 +131,7 @@ static long long percentileNs(std::vector<long long>& sorted, double p) {
 }
 
 static void writeSummary(const std::string& path, const std::string& engine, std::vector<long long> latenciesNs,
-                          int warmup, int measured, int repetitions) {
+                          int warmup, int measured, int repetitions, int concurrency, double aggregateThroughput) {
     std::sort(latenciesNs.begin(), latenciesNs.end());
     size_t n = latenciesNs.size();
     double sum = 0;
@@ -146,14 +148,14 @@ static void writeSummary(const std::string& path, const std::string& engine, std
     long long median = percentileNs(latenciesNs, 0.50);
     long long p95 = percentileNs(latenciesNs, 0.95);
     long long p99 = percentileNs(latenciesNs, 0.99);
-    double throughput = 1e9 / mean;
     long peakRss = readPeakRssKb();
 
     std::ofstream out(path);
     out << "{\n"
         << "  \"engine\": \"" << engine << "\",\n"
+        << "  \"concurrency\": " << concurrency << ",\n"
         << "  \"warmup_iterations\": " << warmup << ",\n"
-        << "  \"measured_iterations\": " << measured << ",\n"
+        << "  \"measured_iterations_per_worker\": " << measured << ",\n"
         << "  \"repetitions\": " << repetitions << ",\n"
         << "  \"sample_count\": " << n << ",\n"
         << "  \"latency_ns\": {\n"
@@ -165,7 +167,7 @@ static void writeSummary(const std::string& path, const std::string& engine, std
         << "    \"max\": " << maxV << ",\n"
         << "    \"stddev\": " << static_cast<long long>(std::round(stddev)) << "\n"
         << "  },\n"
-        << "  \"throughput_per_sec\": " << throughput << ",\n"
+        << "  \"aggregate_throughput_per_sec\": " << aggregateThroughput << ",\n"
         << "  \"peak_rss_kb\": " << peakRss << "\n"
         << "}\n";
 }
@@ -240,8 +242,28 @@ static int runCorrectness(const std::string& modelConf, const std::string& polic
     return (correct == supportedCount) ? 0 : 1;
 }
 
+struct WorkerResult {
+    std::vector<long long> latencies;
+    std::vector<std::string> rawLines;
+};
+
+static void benchmarkWorker(casbin::Enforcer* enforcer, const std::vector<std::map<std::string, std::string>>* scenarios,
+                             int workerId, int measured, WorkerResult* result) {
+    size_t n = scenarios->size();
+    for (int i = 0; i < measured; i++) {
+        const auto& sc = (*scenarios)[i % n];
+        auto start = std::chrono::steady_clock::now();
+        try { enforcer->Enforce(buildDataMap(sc)); } catch (...) {}
+        long long latencyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        result->latencies.push_back(latencyNs);
+        result->rawLines.push_back(std::to_string(workerId) + "\t" + std::to_string(i) + "\t" + sc.at("id") + "\t" + std::to_string(latencyNs));
+    }
+}
+
 static int runBenchmark(const std::string& modelConf, const std::string& policyCsv, const std::string& scenariosTsv,
-                         const std::string& manifestConf, const std::string& rawOutputTsv, const std::string& summaryOutputJson) {
+                         const std::string& manifestConf, int concurrency,
+                         const std::string& rawOutputTsv, const std::string& summaryOutputJson) {
     casbin::Enforcer enforcer(modelConf, policyCsv);
 
     auto manifest = readManifestConf(manifestConf);
@@ -264,36 +286,46 @@ static int runBenchmark(const std::string& modelConf, const std::string& policyC
     }
 
     std::vector<long long> allLatencies;
-    std::ofstream rawOut(rawOutputTsv);
-    rawOut << "repetition\titeration\tscenario_id\tlatency_ns\n";
+    std::vector<std::string> allRawLines;
+    double totalWallSeconds = 0;
+
     for (int rep = 0; rep < repetitions; rep++) {
-        for (int i = 0; i < measured; i++) {
-            auto& sc = scenarios[i % n];
-            auto start = std::chrono::steady_clock::now();
-            try { enforcer.Enforce(buildDataMap(sc)); } catch (...) {}
-            long long latencyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - start).count();
-            allLatencies.push_back(latencyNs);
-            rawOut << rep << "\t" << i << "\t" << sc.at("id") << "\t" << latencyNs << "\n";
+        std::vector<WorkerResult> results(concurrency);
+        std::vector<std::thread> threads;
+        auto repStart = std::chrono::steady_clock::now();
+        for (int w = 0; w < concurrency; w++) {
+            threads.emplace_back(benchmarkWorker, &enforcer, &scenarios, w, measured, &results[w]);
+        }
+        for (auto& t : threads) t.join();
+        totalWallSeconds += std::chrono::duration_cast<std::chrono::duration<double>>(
+            std::chrono::steady_clock::now() - repStart).count();
+        for (auto& r : results) {
+            allLatencies.insert(allLatencies.end(), r.latencies.begin(), r.latencies.end());
+            allRawLines.insert(allRawLines.end(), r.rawLines.begin(), r.rawLines.end());
         }
     }
+
+    std::ofstream rawOut(rawOutputTsv);
+    rawOut << "worker\titeration\tscenario_id\tlatency_ns\n";
+    for (const auto& line : allRawLines) rawOut << line << "\n";
     rawOut.close();
 
-    writeSummary(summaryOutputJson, "casbin-cpp", allLatencies, warmup, measured, repetitions);
-    std::cout << "Casbin-CPP benchmark: " << allLatencies.size() << " measured calls across "
-              << repetitions << " repetitions, summary written to " << summaryOutputJson << "\n";
+    double aggregateThroughput = static_cast<double>(allLatencies.size()) / totalWallSeconds;
+    writeSummary(summaryOutputJson, "casbin-cpp", allLatencies, warmup, measured, repetitions, concurrency, aggregateThroughput);
+    std::cout << "Casbin-CPP benchmark (concurrency=" << concurrency << "): " << allLatencies.size()
+              << " measured calls, aggregate throughput " << aggregateThroughput << "/s, summary written to " << summaryOutputJson << "\n";
     return 0;
 }
 
 int main(int argc, char** argv) {
-    if (argc == 8 && std::string(argv[1]) == "benchmark") {
-        return runBenchmark(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
+    if (argc == 9 && std::string(argv[1]) == "benchmark") {
+        return runBenchmark(argv[2], argv[3], argv[4], argv[5], std::stoi(argv[6]), argv[7], argv[8]);
     }
     if (argc != 7) {
         std::cerr << "usage: casbin_corpus_runner <modelConf> <policyCsv> <scenariosTsv> "
                      "<outputJsonl> <corpusCommit> <adapterCommit>\n"
                   << "   or: casbin_corpus_runner benchmark <modelConf> <policyCsv> <scenariosTsv> "
-                     "<manifestConf> <rawOutputTsv> <summaryOutputJson>\n";
+                     "<manifestConf> <concurrency> <rawOutputTsv> <summaryOutputJson>\n";
         return 2;
     }
     return runCorrectness(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);

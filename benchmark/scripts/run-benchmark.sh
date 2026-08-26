@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Controlled benchmark execution (Step 5B). Requires the correctness gate to
 # pass first (at the requested scale) and the shared benchmark manifest to
-# exist; never invents timing numbers for an unimplemented path.
+# exist; never invents timing numbers for an unimplemented path. Loops over
+# every concurrency level in the manifest's concurrency_levels (comma-
+# separated), writing one summary per (engine, scale, concurrency).
 #
 # Usage: run-benchmark.sh <engine> [scale]
 #   scale: small (default), medium, large -- see scripts/generate-corpus.py
@@ -39,48 +41,57 @@ if [ ! -f "$MANIFEST" ]; then
   exit 1
 fi
 
+CONCURRENCY_LEVELS="$(grep '^concurrency_levels=' "$MANIFEST" | cut -d= -f2 | tr ',' ' ')"
+if [ -z "$CONCURRENCY_LEVELS" ]; then
+  echo "error: concurrency_levels not set in $MANIFEST" >&2
+  exit 1
+fi
+
 echo "=== correctness gate: $ENGINE @ $SCALE ==="
 "$HARNESS_DIR/scripts/run-correctness.sh" "$ENGINE" "$SCALE"
 
 mkdir -p "$RAW_DIR" "$NORMALIZED_DIR"
-RAW_TSV="$RAW_DIR/${SCALE}.tsv"
-SUMMARY_JSON="$NORMALIZED_DIR/${ENGINE}.${SCALE}.benchmark.json"
 
-echo "=== benchmark: $ENGINE @ $SCALE ==="
-case "$ENGINE" in
-  middle-layer)
-    REPO_DIR="/opt/abac-research/repo"
-    java -cp "$REPO_DIR/abacml/target/classes:$REPO_DIR/abacml/target/libs/*" \
-      com.yasusoft.abacml.harness.MiddleLayerCorpusRunner benchmark \
-      "$GENERATED_DIR/middle-layer/$SCALE/policies" \
-      "$GENERATED_DIR/middle-layer/$SCALE/scenarios.tsv" \
-      "$MANIFEST" "$RAW_TSV" "$SUMMARY_JSON"
-    ;;
-  authzforce)
-    ENGINE_DIR="/opt/abac-research/engine/authzforce-core"
-    CLI_JAR="$(find "$ENGINE_DIR/pdp-cli/target" -maxdepth 1 -name 'authzforce-ce-core-pdp-cli-*.jar' 2>/dev/null | head -1)"
-    python3 "$HARNESS_DIR/scripts/run-authzforce-benchmark.py" \
-      "$CLI_JAR" "$GENERATED_DIR/authzforce/$SCALE" "$CORPUS_CANONICAL" \
-      "$MANIFEST" "$RAW_TSV" "$SUMMARY_JSON"
-    ;;
-  sunxacml)
-    RUNNER_CLASSES="/opt/abac-research/engine/sunxacml-build"
-    SUNXACML_JAR="/opt/abac-research/engine/sunxacml-2.0-M1.jar"
-    JAXB_LIBS="/opt/abac-research/engine/jaxb-libs"
-    java -cp "$RUNNER_CLASSES:$SUNXACML_JAR:$JAXB_LIBS/*" \
-      SunXacmlCorpusRunner benchmark \
-      "$GENERATED_DIR/sunxacml/$SCALE/policy.xml" \
-      "$GENERATED_DIR/sunxacml/$SCALE/requests" \
-      "$MANIFEST" "$RAW_TSV" "$SUMMARY_JSON"
-    ;;
-  casbin-cpp)
-    RUNNER_BIN="/opt/abac-research/engine/casbin-cpp/build/casbin_corpus_runner"
-    "$RUNNER_BIN" benchmark \
-      "$GENERATED_DIR/casbin-cpp/$SCALE/model.conf" \
-      "$GENERATED_DIR/casbin-cpp/$SCALE/policy.csv" \
-      "$GENERATED_DIR/casbin-cpp/$SCALE/scenarios.tsv" \
-      "$MANIFEST" "$RAW_TSV" "$SUMMARY_JSON"
-    ;;
-esac
+for CONCURRENCY in $CONCURRENCY_LEVELS; do
+  RAW_TSV="$RAW_DIR/${SCALE}.c${CONCURRENCY}.tsv"
+  SUMMARY_JSON="$NORMALIZED_DIR/${ENGINE}.${SCALE}.c${CONCURRENCY}.benchmark.json"
 
-cat "$SUMMARY_JSON"
+  echo "=== benchmark: $ENGINE @ $SCALE, concurrency=$CONCURRENCY ==="
+  case "$ENGINE" in
+    middle-layer)
+      REPO_DIR="/opt/abac-research/repo"
+      java -cp "$REPO_DIR/abacml/target/classes:$REPO_DIR/abacml/target/libs/*" \
+        com.yasusoft.abacml.harness.MiddleLayerCorpusRunner benchmark \
+        "$GENERATED_DIR/middle-layer/$SCALE/policies" \
+        "$GENERATED_DIR/middle-layer/$SCALE/scenarios.tsv" \
+        "$MANIFEST" "$CONCURRENCY" "$RAW_TSV" "$SUMMARY_JSON"
+      ;;
+    authzforce)
+      ENGINE_DIR="/opt/abac-research/engine/authzforce-core"
+      CLI_JAR="$(find "$ENGINE_DIR/pdp-cli/target" -maxdepth 1 -name 'authzforce-ce-core-pdp-cli-*.jar' 2>/dev/null | head -1)"
+      python3 "$HARNESS_DIR/scripts/run-authzforce-benchmark.py" \
+        "$CLI_JAR" "$GENERATED_DIR/authzforce/$SCALE" "$CORPUS_CANONICAL" \
+        "$MANIFEST" "$CONCURRENCY" "$RAW_TSV" "$SUMMARY_JSON"
+      ;;
+    sunxacml)
+      RUNNER_CLASSES="/opt/abac-research/engine/sunxacml-build"
+      SUNXACML_JAR="/opt/abac-research/engine/sunxacml-2.0-M1.jar"
+      JAXB_LIBS="/opt/abac-research/engine/jaxb-libs"
+      java -cp "$RUNNER_CLASSES:$SUNXACML_JAR:$JAXB_LIBS/*" \
+        SunXacmlCorpusRunner benchmark \
+        "$GENERATED_DIR/sunxacml/$SCALE/policy.xml" \
+        "$GENERATED_DIR/sunxacml/$SCALE/requests" \
+        "$MANIFEST" "$CONCURRENCY" "$RAW_TSV" "$SUMMARY_JSON"
+      ;;
+    casbin-cpp)
+      RUNNER_BIN="/opt/abac-research/engine/casbin-cpp/build/casbin_corpus_runner"
+      "$RUNNER_BIN" benchmark \
+        "$GENERATED_DIR/casbin-cpp/$SCALE/model.conf" \
+        "$GENERATED_DIR/casbin-cpp/$SCALE/policy.csv" \
+        "$GENERATED_DIR/casbin-cpp/$SCALE/scenarios.tsv" \
+        "$MANIFEST" "$CONCURRENCY" "$RAW_TSV" "$SUMMARY_JSON"
+      ;;
+  esac
+
+  cat "$SUMMARY_JSON"
+done

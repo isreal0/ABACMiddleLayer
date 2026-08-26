@@ -10,6 +10,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.wso2.balana.finder.impl.FileBasedPolicyFinderModule;
 
@@ -31,17 +35,22 @@ import com.yasusoft.abacml.ABACML;
  */
 public class MiddleLayerCorpusRunner {
 
-    public static void main(String[] args) throws IOException {
-        if (args.length == 6 && "benchmark".equals(args[0])) {
-            runBenchmark(args[1], args[2], args[3], args[4], args[5]);
+    public static void main(String[] args) throws Exception {
+        if (args.length == 7 && "benchmark".equals(args[0])) {
+            runBenchmark(args[1], args[2], args[3], args[4], args[5], args[6]);
             return;
         }
         if (args.length != 5) {
             System.err.println("usage: MiddleLayerCorpusRunner <policyDir> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>");
-            System.err.println("   or: MiddleLayerCorpusRunner benchmark <policyDir> <scenariosTsv> <manifestConf> <rawOutputTsv> <summaryOutputJson>");
+            System.err.println("   or: MiddleLayerCorpusRunner benchmark <policyDir> <scenariosTsv> <manifestConf> <concurrency> <rawOutputTsv> <summaryOutputJson>");
             System.exit(2);
         }
         runCorrectness(args[0], args[1], args[2], args[3], args[4]);
+    }
+
+    private static final class WorkerResult {
+        final List<Long> latencies = new ArrayList<Long>();
+        final List<String> rawLines = new ArrayList<String>();
     }
 
     private static void runCorrectness(String policyDir, String scenariosTsv, String outputJsonl,
@@ -101,19 +110,23 @@ public class MiddleLayerCorpusRunner {
     }
 
     private static void runBenchmark(String policyDir, String scenariosTsv, String manifestConf,
-                                      String rawOutputTsv, String summaryOutputJson) throws IOException {
+                                      String concurrencyStr, String rawOutputTsv, String summaryOutputJson) throws Exception {
         System.setProperty(FileBasedPolicyFinderModule.POLICY_DIR_PROPERTY, policyDir);
+        final int concurrency = Integer.parseInt(concurrencyStr);
 
         Map<String, String> manifest = readManifest(manifestConf);
-        int warmup = Integer.parseInt(manifest.get("warmup_iterations"));
-        int measured = Integer.parseInt(manifest.get("measured_iterations"));
-        int repetitions = Integer.parseInt(manifest.get("repetitions"));
+        final int warmup = Integer.parseInt(manifest.get("warmup_iterations"));
+        final int measured = Integer.parseInt(manifest.get("measured_iterations"));
+        final int repetitions = Integer.parseInt(manifest.get("repetitions"));
 
         List<String[]> rows = readTsv(scenariosTsv);
-        Map<String, Integer> col = indexHeader(rows.get(0));
-        List<String[]> scenarioRows = rows.subList(1, rows.size());
-        int n = scenarioRows.size();
+        final Map<String, Integer> col = indexHeader(rows.get(0));
+        final List<String[]> scenarioRows = rows.subList(1, rows.size());
+        final int n = scenarioRows.size();
 
+        // Single-threaded warm-up, priming Balana's cached policy before any
+        // worker thread touches it -- avoids the first concurrent worker
+        // paying (and skewing) the one-time load cost.
         for (int i = 0; i < warmup; i++) {
             try {
                 evaluateRow(scenarioRows.get(i % n), col);
@@ -122,31 +135,62 @@ public class MiddleLayerCorpusRunner {
             }
         }
 
+        ExecutorService pool = Executors.newFixedThreadPool(concurrency);
         List<Long> allLatencies = new ArrayList<Long>();
+        List<String> allRawLines = new ArrayList<String>();
+        double totalWallSeconds = 0;
+
+        try {
+            for (int rep = 0; rep < repetitions; rep++) {
+                List<Callable<WorkerResult>> tasks = new ArrayList<Callable<WorkerResult>>();
+                for (int w = 0; w < concurrency; w++) {
+                    final int workerId = w;
+                    tasks.add(new Callable<WorkerResult>() {
+                        public WorkerResult call() {
+                            WorkerResult r = new WorkerResult();
+                            for (int i = 0; i < measured; i++) {
+                                String[] row = scenarioRows.get(i % n);
+                                long start = System.nanoTime();
+                                try {
+                                    evaluateRow(row, col);
+                                } catch (Exception e) {
+                                    // still record latency of the failed call
+                                }
+                                long latencyNs = System.nanoTime() - start;
+                                r.latencies.add(Long.valueOf(latencyNs));
+                                r.rawLines.add(workerId + "\t" + i + "\t" + get(row, col, "id") + "\t" + latencyNs);
+                            }
+                            return r;
+                        }
+                    });
+                }
+                long repStart = System.nanoTime();
+                List<Future<WorkerResult>> futures = pool.invokeAll(tasks);
+                totalWallSeconds += (System.nanoTime() - repStart) / 1e9;
+                for (Future<WorkerResult> f : futures) {
+                    WorkerResult r = f.get();
+                    allLatencies.addAll(r.latencies);
+                    allRawLines.addAll(r.rawLines);
+                }
+            }
+        } finally {
+            pool.shutdown();
+        }
+
         PrintWriter rawOut = new PrintWriter(new FileWriter(rawOutputTsv));
         try {
-            rawOut.println("repetition\titeration\tscenario_id\tlatency_ns");
-            for (int rep = 0; rep < repetitions; rep++) {
-                for (int i = 0; i < measured; i++) {
-                    String[] row = scenarioRows.get(i % n);
-                    long start = System.nanoTime();
-                    try {
-                        evaluateRow(row, col);
-                    } catch (Exception e) {
-                        // still record latency of the failed call
-                    }
-                    long latencyNs = System.nanoTime() - start;
-                    allLatencies.add(Long.valueOf(latencyNs));
-                    rawOut.println(rep + "\t" + i + "\t" + get(row, col, "id") + "\t" + latencyNs);
-                }
+            rawOut.println("worker\titeration\tscenario_id\tlatency_ns");
+            for (String line : allRawLines) {
+                rawOut.println(line);
             }
         } finally {
             rawOut.close();
         }
 
-        writeSummary(summaryOutputJson, "middle-layer", allLatencies, warmup, measured, repetitions);
-        System.out.println("Middle Layer benchmark: " + allLatencies.size() + " measured calls across "
-                + repetitions + " repetitions, summary written to " + summaryOutputJson);
+        double aggregateThroughput = allLatencies.size() / totalWallSeconds;
+        writeSummary(summaryOutputJson, "middle-layer", allLatencies, warmup, measured, repetitions, concurrency, aggregateThroughput);
+        System.out.println("Middle Layer benchmark (concurrency=" + concurrency + "): " + allLatencies.size()
+                + " measured calls, aggregate throughput " + aggregateThroughput + "/s, summary written to " + summaryOutputJson);
     }
 
     private static String evaluateRow(String[] row, Map<String, Integer> col) {
@@ -217,7 +261,8 @@ public class MiddleLayerCorpusRunner {
     }
 
     private static void writeSummary(String path, String engine, List<Long> latenciesNs,
-                                      int warmup, int measured, int repetitions) throws IOException {
+                                      int warmup, int measured, int repetitions,
+                                      int concurrency, double aggregateThroughputPerSec) throws IOException {
         List<Long> sorted = new ArrayList<Long>(latenciesNs);
         Collections.sort(sorted);
         int n = sorted.size();
@@ -239,15 +284,15 @@ public class MiddleLayerCorpusRunner {
         long median = percentile(sorted, 0.50);
         long p95 = percentile(sorted, 0.95);
         long p99 = percentile(sorted, 0.99);
-        double throughputPerSec = 1e9 / mean;
         long peakRssKb = readPeakRssKb();
 
         PrintWriter out = new PrintWriter(new FileWriter(path));
         try {
             out.println("{");
             out.println("  \"engine\": \"" + engine + "\",");
+            out.println("  \"concurrency\": " + concurrency + ",");
             out.println("  \"warmup_iterations\": " + warmup + ",");
-            out.println("  \"measured_iterations\": " + measured + ",");
+            out.println("  \"measured_iterations_per_worker\": " + measured + ",");
             out.println("  \"repetitions\": " + repetitions + ",");
             out.println("  \"sample_count\": " + n + ",");
             out.println("  \"latency_ns\": {");
@@ -259,7 +304,7 @@ public class MiddleLayerCorpusRunner {
             out.println("    \"max\": " + max + ",");
             out.println("    \"stddev\": " + Math.round(stddev));
             out.println("  },");
-            out.println("  \"throughput_per_sec\": " + throughputPerSec + ",");
+            out.println("  \"aggregate_throughput_per_sec\": " + aggregateThroughputPerSec + ",");
             out.println("  \"peak_rss_kb\": " + peakRssKb);
             out.println("}");
         } finally {
