@@ -65,9 +65,20 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   score-policy.xml`). One real interop bug found and fixed along the way:
   AuthzForce rejects the legacy XACML 1.0-namespaced `permit-overrides`
   combining-algorithm URN outright — switched to the XACML 3.0-namespaced
-  one, which both engines accept. **SunXACML** (needs XACML 2.0 syntax
-  translation) and **Casbin-CPP** (different paradigm entirely) adapters
-  are not built yet — that's what's left of Step 4.
+  one, which both engines accept. **SunXACML** is also done and verified:
+  `scripts/run-correctness.sh sunxacml` runs for real, **10/10 scenarios
+  correct**, against a hand-translated XACML 2.0 form of the same reference
+  policy (`corpus/reference-policies/xacml2-course-score-policy.xml` —
+  XACML 2.0 has no generic Category-attributed AttributeDesignator, so the
+  Target/Condition syntax genuinely has to differ, using the native
+  `1.0`-namespaced combining-algorithm URN, which is correct for XACML 2.0,
+  not a downgrade). Getting SunXACML running at all required resolving a
+  runtime-only dependency the pinned 2010-era jar needs but the JDK no
+  longer ships: JAXB (`javax.xml.bind`), removed from the JDK in Java 9+.
+  Pulled the full `org.glassfish.jaxb:jaxb-runtime:2.3.1` dependency tree
+  via Maven into `/opt/abac-research/engine/jaxb-libs/`. **Casbin-CPP**
+  (a genuinely different paradigm — no native XACML/PDP concept) is the
+  only adapter left to build in Step 4.
 - **Step 5 (correctness + benchmarking):** not started.
 - **Step 6 (aggregation + report):** not started.
 

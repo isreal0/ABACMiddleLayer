@@ -17,9 +17,13 @@ domain: a student's score in a specific course). Ground truth was derived
 against `corpus/reference-policies/xacml3-course-score-policy.xml`, a
 hand-authored XACML 3.0 policy using `permit-overrides` combining.
 **Middle Layer** and **AuthzForce Core** adapters are built and verified
-(10/10 correct each), sharing the exact same reference policy file.
-SunXACML and Casbin-CPP adapters are still pending, so their columns in
-the template below are unfilled.
+(10/10 correct each), sharing the exact same XACML 3.0 reference policy
+file. **SunXACML** is also built and verified (10/10 correct), against a
+hand-translated XACML 2.0 form of the same policy (`corpus/reference-
+policies/xacml2-course-score-policy.xml`) — XACML 2.0 has no generic
+Category-attributed AttributeDesignator, so the Target/Condition syntax is
+necessarily different even though the semantics are identical. Casbin-CPP
+adapter is still pending, so its column in the template below is unfilled.
 
 Deliberately deferred to a later corpus revision (not represented by any
 engine yet):
@@ -82,26 +86,31 @@ target).
 
 | Canonical feature | Middle Layer | SunXACML (XACML 2.0) | AuthzForce (XACML 3.0) | Casbin-CPP | Notes / limitations |
 |---|---|---|---|---|---|
-| Permit | ✅ abac-001/002/003 | pending | ✅ abac-001/002/003 (same policy) | pending | |
-| Deny | ✅ abac-004/005/006/007/008/009 | pending | ✅ abac-004/005/006/007/008/009 | pending | |
-| NotApplicable | ✅ abac-010 | pending | ✅ abac-010 | pending | |
+| Permit | ✅ abac-001/002/003 | ✅ abac-001/002/003 (translated policy) | ✅ abac-001/002/003 (same policy) | pending | |
+| Deny | ✅ abac-004/005/006/007/008/009 | ✅ abac-004/005/006/007/008/009 | ✅ abac-004/005/006/007/008/009 | pending | |
+| NotApplicable | ✅ abac-010 | ✅ abac-010 | ✅ abac-010 | pending | |
 | Missing attribute | deferred | deferred | deferred | deferred | See Status above — needs empirical cross-engine pass |
 | Datatype error | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
-| Equality condition | ✅ owner==subject-id, role==literal, dept==dept | pending | ✅ same policy, same result | pending | |
-| Numeric comparison | ✅ clearance>=classification, hour range | pending | ✅ same policy, same result | pending | |
-| Boolean logic | ✅ AND (all rules), OR (network campus/vpn) | pending | ✅ same policy, same result | pending | |
-| Set membership | ✅ action in {SELECT,UPDATE} / policy Target {SELECT,UPDATE,DELETE} | pending | ✅ same policy, same result | pending | |
-| Owner-based rule | ✅ abac-002/006 | pending | ✅ abac-002/006 | pending | |
-| Role-based rule | ✅ abac-001 (admin), abac-003 (lecturer) | pending | ✅ same policy, same result | pending | |
-| Department-based rule | ✅ abac-003/004 | pending | ✅ same policy, same result | pending | |
-| Clearance/classification comparison | ✅ abac-003/005 | pending | ✅ same policy, same result | pending | |
-| Time-of-day condition | ✅ abac-008 | pending | ✅ same policy, same result | pending | |
-| Network condition | ✅ abac-007 | pending | ✅ same policy, same result | pending | |
-| Permit-overrides | ✅ XACML 3.0 URN (not the legacy 1.0 one — see below) | pending | ✅ same policy, same result | pending | Not yet contrasted against deny-overrides/first-applicable on the same conflict — see Status |
+| Equality condition | ✅ owner==subject-id, role==literal, dept==dept | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Numeric comparison | ✅ clearance>=classification, hour range | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Boolean logic | ✅ AND (all rules), OR (network campus/vpn) | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Set membership | ✅ action in {SELECT,UPDATE} / policy Target {SELECT,UPDATE,DELETE} | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Owner-based rule | ✅ abac-002/006 | ✅ abac-002/006 | ✅ abac-002/006 | pending | |
+| Role-based rule | ✅ abac-001 (admin), abac-003 (lecturer) | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Department-based rule | ✅ abac-003/004 | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Clearance/classification comparison | ✅ abac-003/005 | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Time-of-day condition | ✅ abac-008 | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Network condition | ✅ abac-007 | ✅ translated policy, same result | ✅ same policy, same result | pending | |
+| Permit-overrides | ✅ XACML 3.0 URN (not the legacy 1.0 one — see below) | ✅ XACML 1.0-namespaced URN (correct native form for 2.0) | ✅ same policy, same result | pending | Not yet contrasted against deny-overrides/first-applicable on the same conflict — see Status |
 | Deny-overrides | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
 | First-applicable | not yet in corpus (used only in Step 2's throwaway test policy, not the canonical corpus) | not yet in corpus | not yet in corpus | not yet in corpus | |
 | Obligations | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
 | Advice | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
+
+Three engines now agree exactly on all 10 canonical scenarios, using two
+distinct (2.0 vs 3.0) but semantically-equivalent hand-translations of the
+same policy — a genuine cross-engine correctness result, not just three
+independent "it runs" checks.
 
 ## Known engine-specific constraints to record here once confirmed
 
@@ -110,7 +119,17 @@ target).
   `unsupported` rather than forcing a binary Permit/Deny.
 - **SunXACML** is unmaintained XACML 2.0; XACML 3.0-only constructs used by
   AuthzForce scenarios must be marked `unsupported` here, not silently
-  downgraded.
+  downgraded. It also has a real runtime gap on modern JDKs: the pinned
+  2010-era jar's request/response marshalling is JAXB-based
+  (`javax.xml.bind`), which the JDK shipped built-in through Java 8 but
+  removed entirely from Java 9 onward. On the installed OpenJDK 11, the PDP
+  fails every single request with `Indeterminate` / `NoClassDefFoundError:
+  javax/xml/bind/JAXBException` unless the JAXB runtime is put back on the
+  classpath explicitly — resolved by adding
+  `org.glassfish.jaxb:jaxb-runtime:2.3.1` (and its transitive dependencies)
+  from `/opt/abac-research/engine/jaxb-libs/`. Anyone re-running this
+  engine's tests from a clean classpath will hit the exact same failure if
+  they omit those jars.
 - **Middle Layer** PDP is confirmed as WSO2 Balana 1.1.12, XACML 3.0 (see
   `docs/architecture.md`). Its resource granularity is still per-database in
   the live Postgres path (`Check_ABAC_Permission`); the benchmark-facing
