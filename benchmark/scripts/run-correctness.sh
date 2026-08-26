@@ -64,7 +64,24 @@ case "$ENGINE" in
       "$NORMALIZED_DIR/authzforce.jsonl" \
       "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
     ;;
-  sunxacml|casbin-cpp)
+  sunxacml)
+    RUNNER_CLASSES="/opt/abac-research/engine/sunxacml-build"
+    SUNXACML_JAR="/opt/abac-research/engine/sunxacml-2.0-M1.jar"
+    JAXB_LIBS="/opt/abac-research/engine/jaxb-libs"
+    if [ ! -f "$RUNNER_CLASSES/SunXacmlCorpusRunner.class" ]; then
+      echo "error: SunXacmlCorpusRunner not built. Run:" >&2
+      echo "  javac -cp \"$SUNXACML_JAR:$JAXB_LIBS/*\" -d $RUNNER_CLASSES $HARNESS_DIR/harness/sunxacml/SunXacmlCorpusRunner.java" >&2
+      exit 1
+    fi
+    java -cp "$RUNNER_CLASSES:$SUNXACML_JAR:$JAXB_LIBS/*" \
+      SunXacmlCorpusRunner \
+      "$GENERATED_DIR/sunxacml/policy.xml" \
+      "$GENERATED_DIR/sunxacml/requests" \
+      "$GENERATED_DIR/sunxacml/manifest.tsv" \
+      "$NORMALIZED_DIR/sunxacml.jsonl" \
+      "$CORPUS_COMMIT" "$ADAPTER_COMMIT"
+    ;;
+  casbin-cpp)
     echo "error: no adapter implemented yet for '$ENGINE' (Step 4 in progress)." >&2
     exit 1
     ;;
