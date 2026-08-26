@@ -84,11 +84,38 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   (`corpus/reference-policies/casbin-model.conf`), and the one scenario
   whose canonical answer is `NotApplicable` (abac-010) is honestly marked
   `supported: false` rather than forced into a fake Permit/Deny comparison.
-  **All four adapters are now implemented and passing** — Step 4's
-  remaining work is expanding corpus coverage (medium/large sizes, missing-
-  attribute semantics, deny-overrides/first-applicable demonstration,
-  obligations/advice), not new adapters.
-- **Step 5 (correctness + benchmarking):** not started.
+  **All four adapters are now implemented and passing.** Policy-scale
+  tiers (small/medium/large — see Step 5) are done; remaining Step 4 work
+  is missing-attribute semantics, a deny-overrides/first-applicable
+  demonstration, and obligations/advice, none of which need new adapters.
+- **Step 5 (correctness + benchmarking):** in progress.
+  `scripts/run-correctness.sh <engine> [small|medium|large]` generates
+  three policy-scale tiers per engine (0/1000/5000 decoy rules/rows that
+  can never match a real scenario) and **correctness holds at 10/10 (9/9
+  for Casbin-CPP) at every scale, on all four engines** — 12/12
+  engine×scale combinations verified. Every runner now records real
+  `policy_load_ns`/`evaluation_ns` (previously null placeholders) instead
+  of fabricated timing. First look at the scaling signal (single-sample,
+  not yet averaged over repeated iterations — see caveat below):
+
+  | Engine | small load | medium load | large load |
+  |---|---|---|---|
+  | Middle Layer | 171 ms | 261 ms | 458 ms |
+  | SunXACML | 93 ms | 205 ms | 490 ms |
+  | Casbin-CPP | 0.4 ms | 2.0 ms | 7.4 ms |
+  | AuthzForce (total, no batch mode) | 1.56 s | 2.09 s | 3.33 s |
+
+  Casbin-CPP's policy files are trivially cheap to parse (plain CSV) next
+  to the three XML-based engines. AuthzForce's numbers are the whole
+  subprocess wall time (JVM startup + load + eval, inseparable — it has no
+  batch mode, see `semantic-mapping.md`), not a clean load-only figure, so
+  it isn't directly comparable to the other three's load-only column.
+  **Caveat:** these are single samples per tier, not the guide's proper
+  warmup/measured-iteration protocol — SunXACML's `evaluation_ns` in
+  particular didn't show a clean trend on one sample (JIT/cache noise),
+  which is exactly why Step 5B calls for averaging over many iterations
+  rather than trusting one data point. That protocol (benchmark manifest,
+  concurrency levels, percentiles) hasn't been built yet.
 - **Step 6 (aggregation + report):** not started.
 
 See `docs/architecture.md` for the implementation architecture and
