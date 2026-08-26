@@ -88,55 +88,69 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   tiers (small/medium/large — see Step 5) are done; remaining Step 4 work
   is missing-attribute semantics, a deny-overrides/first-applicable
   demonstration, and obligations/advice, none of which need new adapters.
-- **Step 5 (correctness + benchmarking):** in progress.
+- **Step 5 (correctness + benchmarking):** 5A done, 5B first pass done.
   `scripts/run-correctness.sh <engine> [small|medium|large]` generates
-  three policy-scale tiers per engine (0/1000/5000 decoy rules/rows that
-  can never match a real scenario) and **correctness holds at 10/10 (9/9
-  for Casbin-CPP) at every scale, on all four engines** — 12/12
-  engine×scale combinations verified. Every runner now records real
-  `policy_load_ns`/`evaluation_ns` (previously null placeholders) instead
-  of fabricated timing. First look at the scaling signal (single-sample,
-  not yet averaged over repeated iterations — see caveat below):
+  three policy-scale tiers per engine (0/1000/5000 decoy rules/rows,
+  realistic and randomized — see below — that can never flip a real
+  scenario's expected decision) and **correctness holds at 10/10 (9/9 for
+  Casbin-CPP) at every scale, on all four engines** — 12/12 engine×scale
+  combinations verified.
 
-  Decoys were initially a single never-matching condition repeated N
-  times — cheaper to parse than a real rule, which understated XACML's
-  parsing cost. Reworked into three structurally-varied, realistic shapes
-  (role+network / department+clearance / action+hour) drawn from real
-  value pools (15 departments, 10 roles, etc.) via a fixed-seed RNG, all
-  `Effect="Deny"` so they're safe to let coincidentally match a real
-  scenario under `permit-overrides` (a Deny-effect rule can never flip an
-  expected Permit) — correctness re-verified 10/10 (9/9 Casbin-CPP) at all
-  three scales after the change. Current numbers:
+  Decoys draw from three structurally-varied, realistic shapes
+  (role+network / department+clearance / action+hour) using real value
+  pools (15 departments, 10 roles, etc.) via a fixed-seed RNG (260825,
+  byte-identical across all four VMs), all `Effect="Deny"` so they're safe
+  to let coincidentally match a real scenario under `permit-overrides` (a
+  Deny-effect rule can never flip an expected Permit).
 
-  | Engine | small load | medium load | large load |
-  |---|---|---|---|
-  | Middle Layer | 180 ms | 286 ms | 572 ms |
-  | SunXACML | 91 ms | 216 ms | 616 ms |
-  | Casbin-CPP | 0.7 ms | 2.1 ms | 7.5 ms |
-  | AuthzForce (total, no batch mode) | 1.35 s | 2.43 s | 4.36 s |
+  **Step 5B**: a real manifest-driven protocol (`benchmark-manifest.conf`
+  — warmup=5, measured=20, repetitions=3; deliberately small since
+  AuthzForce's CLI has no batch mode and would take hours at guide-scale
+  numbers; concurrency testing deferred). All four runners now support a
+  `benchmark` mode: warm-up discarded, then `repetitions × measured`
+  calls **round-robin across all 10 canonical scenarios** (not repeatedly
+  sampling one Permit case, which short-circuits before ever reaching a
+  policy's decoy rules — an early single-sample pass made exactly that
+  mistake and showed a flat/noisy trend for SunXACML as a result), with
+  per-call latency recorded to a raw TSV and median/mean/p95/p99/stddev/
+  throughput/peak-RSS computed into a summary JSON. `scripts/run-
+  benchmark.sh <engine> [scale]` runs the correctness gate first, then
+  the benchmark. Full results (median / p95 / p99 latency, throughput,
+  peak RSS):
 
-  Casbin-CPP's policy files are plain CSV — trivially cheap to parse next
-  to the three XML-based engines, and its matcher never reads policy-row
-  content at all, so its decoy rows are cosmetic regardless of format.
-  AuthzForce's numbers are the whole subprocess wall time (JVM startup +
-  load + eval, inseparable — it has no batch mode, see
-  `semantic-mapping.md`), not a clean load-only figure, so it isn't
-  directly comparable to the other three's load-only column.
+  | Engine | Scale | Median | p95 | p99 | Throughput/s | Peak RSS |
+  |---|---|---|---|---|---|---|
+  | Middle Layer | small | 3.1 ms | 5.4 ms | 9.0 ms | 298 | 122 MB |
+  | Middle Layer | medium | 22.8 ms | 33.1 ms | 36.5 ms | 41 | 433 MB |
+  | Middle Layer | large | 200.7 ms | 310.8 ms | 413.4 ms | 4.4 | 1.35 GB |
+  | SunXACML | small | 2.6 ms | 5.1 ms | 28.9 ms | 278 | 101 MB |
+  | SunXACML | medium | 30.1 ms | 66.3 ms | 85.5 ms | 37 | 348 MB |
+  | SunXACML | large | 156.9 ms | 174.2 ms | 247.1 ms | 9.9 | 584 MB |
+  | Casbin-CPP | small | 0.14 ms | 0.18 ms | 0.19 ms | 6684 | 6.8 MB |
+  | Casbin-CPP | medium | 1.48 ms | 3.43 ms | 3.63 ms | 697 | 7.1 MB |
+  | Casbin-CPP | large | 7.10 ms | 7.18 ms | 11.75 ms | 197 | 7.7 MB |
+  | AuthzForce* | small | 1.38 s | 1.45 s | 1.51 s | 0.72 | n/a |
+  | AuthzForce* | medium | 2.47 s | 2.58 s | 2.76 s | 0.40 | n/a |
+  | AuthzForce* | large | 4.40 s | 4.59 s | 4.75 s | 0.23 | n/a |
 
-  **Caveats, both pointing at the same fix (Step 5B's proper protocol,
-  not built yet):**
-  1. These are single samples per tier, not averaged over repeated
-     iterations.
-  2. The sampled scenario (abac-001) is a **Permit** case — under
-     `permit-overrides`, evaluation can short-circuit the moment a
-     matching Permit rule is found, which for our policies happens within
-     the first few real rules, *before* any decoy is ever reached. That
-     means this sample mostly isn't measuring decoy-scan cost at all. A
-     **Deny** scenario (e.g. abac-004) must scan every remaining rule,
-     including all the decoys, before concluding Deny — that's the
-     scenario that will actually show scan-cost scaling, and it's why
-     SunXACML's `evaluation_ns` looked flat/noisy above: the wrong
-     scenario was sampled for that question.
+  \* AuthzForce's numbers are the whole subprocess wall time (JVM startup
+  + policy load + evaluation, inseparable — no batch mode); not directly
+  comparable to the other three's in-process figures. Its "peak RSS" is
+  omitted (marked n/a) because the Python orchestrator measures its own
+  `/proc/self/status`, not the actual Java subprocess doing the work — a
+  known measurement bug, not a claim that AuthzForce uses ~12MB.
+
+  Round-robin sampling produced a **clean, monotonic** scaling trend on
+  every engine (unlike the earlier single-Permit-sample pass), and
+  reconfirms Casbin-CPP's architectural lightness from the earlier
+  discussion: 3 orders of magnitude less peak memory than the XML-based
+  engines, consistent with plain-CSV parsing versus DOM tree construction.
+
+  **Not yet done:** concurrency testing (concurrency_levels beyond 1),
+  guide-scale iteration counts (would require a faster AuthzForce
+  invocation path — e.g. its embedded API instead of spawning the CLI —
+  to be practical), and fixing the AuthzForce peak-RSS measurement to
+  target the actual subprocess.
 - **Step 6 (aggregation + report):** not started.
 
 See `docs/architecture.md` for the implementation architecture and
