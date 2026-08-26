@@ -46,7 +46,13 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   JUnit test, without touching the live Postgres/JNI path
   (`Check_ABAC_Permission`) or its policy directory. See
   `docs/architecture.md` and `docs/semantic-mapping.md`.
-- **Step 3 (baseline installs):** not started.
+- **Step 3 (baseline installs):** done. SunXACML `2.0-M1` JAR pinned on
+  DevInstance2. AuthzForce Core built clean (all 5 modules) on DevInstance3,
+  commit `ab73ad39c`. Casbin-CPP built with 74/74 tests passing on
+  DevInstance4, commit `ce8c55ed1`. Two apt toolchains were too old for
+  these projects (Maven 3.6.3, CMake 3.22.1) and were supplemented with
+  newer local binaries (Maven 3.9.9, CMake 3.29.9) without touching the
+  system-wide versions — see `docs/architecture.md` for why.
 - **Step 4 (canonical corpus + adapters):** not started.
 - **Step 5 (correctness + benchmarking):** not started.
 - **Step 6 (aggregation + report):** not started.
