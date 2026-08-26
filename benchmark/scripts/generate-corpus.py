@@ -40,9 +40,12 @@ def generate_middle_layer(scenarios, output_dir, ref_policies_dir):
     ml_policies_dir = os.path.join(ml_dir, "policies")
     os.makedirs(ml_policies_dir, exist_ok=True)
 
-    for name in os.listdir(ref_policies_dir):
-        if name.endswith(".xml"):
-            shutil.copyfile(os.path.join(ref_policies_dir, name), os.path.join(ml_policies_dir, name))
+    # Only the XACML 3.0 reference policy -- Balana loads every *.xml file in
+    # its policy directory, so copying the whole ref_policies_dir (which also
+    # holds the XACML 2.0 translation for SunXACML) would make it try to load
+    # a policy in a namespace/schema it never needs to see.
+    ref_name = "xacml3-course-score-policy.xml"
+    shutil.copyfile(os.path.join(ref_policies_dir, ref_name), os.path.join(ml_policies_dir, ref_name))
 
     columns = [
         "id", "subject_id", "subject_role", "subject_department", "subject_clearance",
@@ -177,6 +180,89 @@ def generate_authzforce(scenarios, output_dir, ref_policies_dir):
     print(f"wrote {len(scenarios)} request files to {requests_dir}")
 
 
+def _sunxacml_string_attr(attribute_id, value):
+    if value is None:
+        return ""
+    return (f'    <Attribute AttributeId="{attribute_id}" DataType="http://www.w3.org/2001/XMLSchema#string">\n'
+            f'      <AttributeValue>{_xml_escape(str(value))}</AttributeValue>\n'
+            f'    </Attribute>\n')
+
+
+def _sunxacml_integer_attr(attribute_id, value):
+    if value is None:
+        return ""
+    return (f'    <Attribute AttributeId="{attribute_id}" DataType="http://www.w3.org/2001/XMLSchema#integer">\n'
+            f'      <AttributeValue>{value}</AttributeValue>\n'
+            f'    </Attribute>\n')
+
+
+def build_xacml2_request(subject_id, subject_role, subject_department, subject_clearance,
+                          resource_id, resource_owner, resource_department, resource_classification,
+                          action, env_network, env_hour):
+    """XACML 2.0 request format (Subject/Resource/Action/Environment elements,
+    not XACML 3.0's Category-attributed Attributes) -- required by SunXACML.
+    Same AttributeId convention as build_xacml3_request; see
+    benchmark/docs/semantic-mapping.md."""
+    subject_attrs = (
+        _sunxacml_string_attr("urn:oasis:names:tc:xacml:1.0:subject:subject-id", subject_id)
+        + _sunxacml_string_attr("urn:uoa:canvas:subject:role", subject_role)
+        + _sunxacml_string_attr("urn:uoa:canvas:subject:department", subject_department)
+        + _sunxacml_integer_attr("urn:uoa:canvas:subject:clearance", subject_clearance)
+    )
+    resource_attrs = (
+        _sunxacml_string_attr("urn:oasis:names:tc:xacml:1.0:resource:resource-id", resource_id)
+        + _sunxacml_string_attr("urn:uoa:canvas:resource:owner", resource_owner)
+        + _sunxacml_string_attr("urn:uoa:canvas:resource:department", resource_department)
+        + _sunxacml_integer_attr("urn:uoa:canvas:resource:classification", resource_classification)
+    )
+    action_attrs = _sunxacml_string_attr("urn:oasis:names:tc:xacml:1.0:action:action-id", action)
+    env_attrs = (
+        _sunxacml_string_attr("urn:uoa:canvas:environment:network", env_network)
+        + _sunxacml_integer_attr("urn:uoa:canvas:environment:hour", env_hour)
+    )
+
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+<Request xmlns="urn:oasis:names:tc:xacml:2.0:context:schema:os">
+  <Subject>
+{subject_attrs}  </Subject>
+  <Resource>
+{resource_attrs}  </Resource>
+  <Action>
+{action_attrs}  </Action>
+  <Environment>
+{env_attrs}  </Environment>
+</Request>
+'''
+
+
+def generate_sunxacml(scenarios, output_dir, ref_policies_dir):
+    sx_dir = os.path.join(output_dir, "sunxacml")
+    requests_dir = os.path.join(sx_dir, "requests")
+    os.makedirs(requests_dir, exist_ok=True)
+
+    ref_policy_path = os.path.join(ref_policies_dir, "xacml2-course-score-policy.xml")
+    shutil.copyfile(ref_policy_path, os.path.join(sx_dir, "policy.xml"))
+
+    manifest_path = os.path.join(sx_dir, "manifest.tsv")
+    with open(manifest_path, "w", encoding="utf-8", newline="\n") as mf:
+        mf.write("id\texpected\n")
+        for s in scenarios:
+            subject = s.get("subject", {})
+            resource = s.get("resource", {})
+            environment = s.get("environment", {})
+            req_xml = build_xacml2_request(
+                subject.get("id"), subject.get("role"), subject.get("department"), subject.get("clearance"),
+                resource.get("id"), resource.get("owner"), resource.get("department"), resource.get("classification"),
+                s.get("action"), environment.get("network"), environment.get("hour"),
+            )
+            with open(os.path.join(requests_dir, f'{s["id"]}.xml'), "w", encoding="utf-8") as f:
+                f.write(req_xml)
+            mf.write(f'{s["id"]}\t{s["expected"]}\n')
+
+    print(f"wrote policy.xml + manifest.tsv to {sx_dir}")
+    print(f"wrote {len(scenarios)} request files to {requests_dir}")
+
+
 def main():
     if len(sys.argv) != 4:
         print("usage: generate-corpus.py <canonical-scenarios-json> <output-dir> <reference-policies-dir>", file=sys.stderr)
@@ -188,6 +274,7 @@ def main():
 
     generate_middle_layer(scenarios, output_dir, ref_policies_dir)
     generate_authzforce(scenarios, output_dir, ref_policies_dir)
+    generate_sunxacml(scenarios, output_dir, ref_policies_dir)
     return 0
 
 
