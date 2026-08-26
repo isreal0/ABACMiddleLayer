@@ -53,7 +53,14 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   these projects (Maven 3.6.3, CMake 3.22.1) and were supplemented with
   newer local binaries (Maven 3.9.9, CMake 3.29.9) without touching the
   system-wide versions — see `docs/architecture.md` for why.
-- **Step 4 (canonical corpus + adapters):** not started.
+- **Step 4 (canonical corpus + adapters):** in progress. 10-scenario
+  canonical corpus in the UOA course-score domain (a student's score in a
+  specific course) covering Permit/Deny/NotApplicable, owner/role/
+  department rules, numeric clearance comparison, time-of-day, network
+  condition, and set-membership on action. Middle Layer adapter done and
+  verified: `scripts/run-correctness.sh middle-layer` runs for real,
+  **10/10 scenarios correct**. SunXACML, AuthzForce, and Casbin-CPP
+  adapters are not built yet — that's what's left of Step 4.
 - **Step 5 (correctness + benchmarking):** not started.
 - **Step 6 (aggregation + report):** not started.
 

@@ -12,11 +12,28 @@ documented here, not just handled silently.
 
 ## Status
 
-No canonical scenarios exist yet (Step 4 is not started). Step 2 did,
-however, extend the Middle Layer's attribute model and lock in an
-AttributeId convention (below) so the Step 4 generator has a fixed target
-to emit XACML requests against — recorded here now rather than left
-implicit in `abacml` source, per this document's own rule above.
+`corpus/canonical/scenarios.json` exists (10 scenarios, UOA course-score
+domain: a student's score in a specific course). Ground truth was derived
+against `corpus/reference-policies/xacml3-course-score-policy.xml`, a
+hand-authored XACML 3.0 policy using `permit-overrides` combining. Only the
+**Middle Layer adapter** is built and verified so far (10/10 correct);
+SunXACML, AuthzForce, and Casbin-CPP adapters are still pending, so their
+columns in the template below are unfilled.
+
+Deliberately deferred to a later corpus revision (not represented by any
+engine yet):
+- **Missing attribute / Indeterminate.** XACML's rules for combining an
+  Indeterminate rule result under `permit-overrides` are subtle and
+  implementation-nuanced; rather than assert an `expected` value I haven't
+  verified, this needs an empirical cross-engine comparison pass of its own
+  before being added as ground truth.
+- **Explicit combining-algorithm comparison** (the same conflicting
+  Permit+Deny match evaluated under `permit-overrides` vs `deny-overrides`
+  vs `first-applicable` to show the algorithm choice actually changes the
+  outcome). The current corpus uses `permit-overrides` throughout but
+  doesn't yet demonstrate the other two algorithms changing the result.
+- **Datatype errors, obligations, advice** — not yet represented in any
+  scenario.
 
 ## Domain and AttributeId convention (all engines, fixed in Step 2)
 
@@ -63,26 +80,26 @@ target).
 
 | Canonical feature | Middle Layer | SunXACML (XACML 2.0) | AuthzForce (XACML 3.0) | Casbin-CPP | Notes / limitations |
 |---|---|---|---|---|---|
-| Permit | | | | | |
-| Deny | | | | | |
-| NotApplicable | | | | | |
-| Missing attribute | | | | | |
-| Datatype error | | | | | |
-| Equality condition | | | | | |
-| Numeric comparison | | | | | |
-| Boolean logic | | | | | |
-| Set membership | | | | | |
-| Owner-based rule | | | | | |
-| Role-based rule | | | | | |
-| Department-based rule | | | | | |
-| Clearance/classification comparison | | | | | |
-| Time-of-day condition | | | | | |
-| Network condition | | | | | |
-| Permit-overrides | | | | | |
-| Deny-overrides | | | | | |
-| First-applicable | | | | | |
-| Obligations | | | | | |
-| Advice | | | | | |
+| Permit | ✅ abac-001/002/003 | pending | pending | pending | |
+| Deny | ✅ abac-004/005/006/007/008/009 | pending | pending | pending | |
+| NotApplicable | ✅ abac-010 | pending | pending | pending | |
+| Missing attribute | deferred | deferred | deferred | deferred | See Status above — needs empirical cross-engine pass |
+| Datatype error | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
+| Equality condition | ✅ owner==subject-id, role==literal, dept==dept | pending | pending | pending | |
+| Numeric comparison | ✅ clearance>=classification, hour range | pending | pending | pending | |
+| Boolean logic | ✅ AND (all rules), OR (network campus/vpn) | pending | pending | pending | |
+| Set membership | ✅ action in {SELECT,UPDATE} / policy Target {SELECT,UPDATE,DELETE} | pending | pending | pending | |
+| Owner-based rule | ✅ abac-002/006 | pending | pending | pending | |
+| Role-based rule | ✅ abac-001 (admin), abac-003 (lecturer) | pending | pending | pending | |
+| Department-based rule | ✅ abac-003/004 | pending | pending | pending | |
+| Clearance/classification comparison | ✅ abac-003/005 | pending | pending | pending | |
+| Time-of-day condition | ✅ abac-008 | pending | pending | pending | |
+| Network condition | ✅ abac-007 | pending | pending | pending | |
+| Permit-overrides | ✅ used as the corpus's only combining algorithm so far | pending | pending | pending | Not yet contrasted against deny-overrides/first-applicable on the same conflict — see Status |
+| Deny-overrides | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
+| First-applicable | not yet in corpus (used only in Step 2's throwaway test policy, not the canonical corpus) | not yet in corpus | not yet in corpus | not yet in corpus | |
+| Obligations | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
+| Advice | not yet in corpus | not yet in corpus | not yet in corpus | not yet in corpus | |
 
 ## Known engine-specific constraints to record here once confirmed
 
