@@ -13,50 +13,100 @@ performance are comparable across systems.
 ```
 canonical scenarios (corpus/canonical, one Git commit, identical on all 4 VMs)
         |
-        +--> Middle Layer adapter   --> DevInstance   (C/Postgres + JNI + XACML PDP)
+        +--> Middle Layer adapter   --> DevInstance   (C/Postgres + JNI + Balana XACML PDP)
         +--> SunXACML adapter       --> DevInstance2  (XACML 2.0)
         +--> AuthzForce adapter     --> DevInstance3  (XACML 3.0)
         +--> Casbin-CPP adapter     --> DevInstance4  (model.conf/policy.csv)
 ```
 
-## ABAC Middle Layer (DevInstance) — as found
+## ABAC Middle Layer (DevInstance) — as found (confirmed by source inspection, Step 2)
 
 DevInstance was **not** a blank VM: it already carries prior implementation
 work, checked out at `~/project` (this repository, remote
 `github.com/isreal0/ABACMiddleLayer`) and symlinked into
 `/opt/abac-research/repo`.
 
-Call path (as documented by the repository owner):
+### PDP library: WSO2 Balana 1.1.12 (confirmed, not SunXACML)
+
+`abacml/pom.xml` pins `org.wso2.balana:org.wso2.balana:1.1.12` (plus
+`org.wso2.balana.utils`, `xercesImpl-2.8.1.wso2v2`, `commons-logging`). This
+matches the original design notes and is **distinct from SunXACML**, which
+remains the separate, isolated DevInstance2 baseline — the two were never
+conflated.
+
+### Call path (confirmed from source, `postgres/src/backend/tcop/postgres.c` ~line 4630 and `abacml/src/main/java/com/yasusoft/abacml/ABACML.java`)
 
 ```
-PostgreSQL (postgres/src/backend/tcop/postgres.c, trigger point)
-    -> C code
-    -> JNI call into Balana  (abacml/src/main/java/com/yasusoft/abacml/ABACML.java)
-    -> XACML policy evaluation
-    -> decision returned to C code
-    -> back to Postgres
+PostgresMain(), simple-query path ('Q' message)
+  -> JNI_CreateJavaVM with -Djava.class.path=/home/ubuntu/project/abacml/target/abacml-dev.jar
+     (first query per backend process; JNI_EEXIST -> JNI_GetCreatedJavaVMs +
+      AttachCurrentThread on subsequent queries in the same backend — this
+      reuse was added specifically to avoid repeated-JVM-creation crashes,
+      per commit "Updated JVM invocation code to avoid jvm crash")
+  -> FindClass("com/yasusoft/abacml/ABACML")
+     GetStaticMethodID("Check_ABAC_Permission", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z")
+  -> Check_ABAC_Permission(subjectName, action, uri)
+       -> initBalana(): sets FileBasedPolicyFinderModule.POLICY_DIR_PROPERTY
+          to abacml/resources (hardcoded absolute path), Balana.getInstance()
+       -> createXACMLRequest(name, action, uri): builds a fixed XACML 3.0
+          <Request> with exactly three attributes — subject-id, action-id,
+          resource-id (all xs:string) — no environment category, no
+          role/department/clearance/owner/classification attributes
+       -> PDP.evaluate(request) -> ResponseCtx -> first Result's decision
+       -> returns **boolean**: true iff decision == Permit; Deny,
+          NotApplicable, and Indeterminate all collapse to false
+  -> boolean result returned across JNI to postgres.c
 ```
 
-Key paths inside `~/project`:
+Request construction on the C side (same function, after the JNI call site):
+the SQL verb is extracted from the raw query string (uppercased, first
+whitespace-delimited token) and used as `action`; `resource` is
+`"/UOA_CANVAS_LMS/" + dbname` — i.e. **authorization granularity is
+per-database, not per-table or per-row**, and the `UOA_CANVAS_LMS` prefix is
+hardcoded from the implementation's original use case (a university LMS
+scenario), not general-purpose.
 
-- `abacml/` — customized Java module, JNI entry point, Maven build
-  (`abacml/pom.xml`).
-- `postgres/` — modified PostgreSQL source tree (not vendored via submodule;
-  merged directly into this repo's history).
-- `data/` — PostgreSQL data directory (git-ignored).
-- `abacmlpolicy.xml` / `abacml/resources/abacmlpolicy.xml` — XACML policy
-  (the root-level copy is a runtime-generated duplicate; treated as a build
-  artifact, git-ignored, and slated to be replaced by the canonically
-  generated policy in Step 4).
-- `generate_policy.c`, `generate_rule.c` (+ compiled `gpolicy`, `grule`) —
-  legacy policy/rule generators; superseded by the canonical-corpus generator
-  once Step 4 lands.
+The policy currently on disk (`abacml/resources/abacmlpolicy.xml`, tracked)
+is a single first-applicable rule: `subject-id == "ubuntu"` -> Permit
+(unconditional, on any action/resource). It is a smoke-test policy, not a
+representative ABAC ruleset.
 
-**Open item:** confirm from `abacml/pom.xml` which XACML implementation is
-actually pinned (design notes mention WSO2 Balana; do not assume this without
-checking, and do not conflate it with SunXACML, which is the separate
-DevInstance2 baseline). Record the finding and justification here once
-verified (Step 2).
+### Gap vs. the canonical corpus model (must be closed in Step 2, before Step 4 adapters can be written)
+
+The master guide's canonical scenario format (subject role/department/
+clearance, resource owner/department/classification, environment
+network/hour, and Permit/Deny/NotApplicable/Indeterminate decisions) is
+**not yet representable** by the current Middle Layer:
+
+1. **Attribute model.** `createXACMLRequest` must be extended to carry the
+   full canonical attribute set (subject, resource, and environment
+   categories), not just three id strings.
+2. **Decision fidelity.** `Check_ABAC_Permission`'s boolean return type must
+   be replaced (or paralleled by a new method) that surfaces the actual
+   XACML decision (Permit/Deny/NotApplicable/Indeterminate) end-to-end
+   through the JNI boundary, so the harness can normalize it per
+   `schemas/result.schema.json` instead of losing information at the
+   Deny/NotApplicable/Indeterminate boundary.
+3. **Resource granularity.** The database-level-only resource identifier
+   (`/UOA_CANVAS_LMS/<dbname>`) cannot represent per-resource attributes
+   (owner, department, classification) required by the corpus; this needs a
+   generalized resource-attribute path independent of the LMS-specific
+   prefix.
+4. **Portability.** Policy directory and classpath are hardcoded absolute
+   paths (`/home/ubuntu/project/...`) baked into both the Java source and
+   `postgres.c`. Fine for a single-VM proof of concept; will need
+   parameterization (env var or config file) so the benchmark harness can
+   drive it without editing source.
+5. **Policy generation.** The one on-disk policy is a hand-written smoke
+   test. Step 4's canonically-generated XACML policies (from
+   `corpus/canonical`) will replace it as the actual test input — the
+   legacy `generate_policy.c`/`generate_rule.c`/`gpolicy`/`grule` tools and
+   `policy1k`/`policy5k` directories are earlier, ungoverned attempts at
+   this and are superseded, not extended.
+
+None of the above has been changed yet — this section only records what
+Step 2 inspection found. No code has been modified in `abacml/` or
+`postgres/` as part of this survey.
 
 ## Baselines — as found
 
@@ -85,7 +135,7 @@ installed independently in Step 3, isolated from the others.
 
 | Engine | Library | Version/commit | Justification |
 |---|---|---|---|
-| Middle Layer | TBD (Balana vs. other) | TBD | Pending inspection of `abacml/pom.xml` (Step 2) |
+| Middle Layer | WSO2 Balana | `1.1.12` (confirmed via `abacml/pom.xml`) | Matches original design notes; distinct from SunXACML (DevInstance2 baseline) |
 | SunXACML baseline | `net.sf.sunxacml:sunxacml` | `2.0-M1` (pinned JAR) | Specified by the master guide as the legacy XACML 2.0 baseline |
 | AuthzForce baseline | `authzforce/core` | TBD (pin at clone time) | Specified by the master guide as the modern XACML 3.0 baseline |
 | Casbin-CPP baseline | `apache/casbin-cpp` | TBD (pin at clone time) | Specified by the master guide as the embedded PERM-model baseline |
