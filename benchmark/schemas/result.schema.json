@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/isreal0/ABACMiddleLayer/benchmark/schemas/result.schema.json",
+  "title": "Normalized engine result record",
+  "type": "object",
+  "required": [
+    "run_id", "engine", "engine_version", "hostname", "corpus_commit",
+    "adapter_commit", "scenario_id", "expected", "actual", "supported", "correct"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string" },
+    "engine": { "type": "string", "enum": ["middle-layer", "sunxacml", "authzforce", "casbin-cpp"] },
+    "engine_version": { "type": "string" },
+    "hostname": { "type": "string", "enum": ["devinstance", "devinstance2", "devinstance3", "devinstance4"] },
+    "corpus_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "adapter_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "scenario_id": { "type": "string" },
+    "expected": { "type": "string", "enum": ["Permit", "Deny", "NotApplicable", "Indeterminate"] },
+    "actual": { "type": ["string", "null"], "enum": ["Permit", "Deny", "NotApplicable", "Indeterminate", null] },
+    "supported": { "type": "boolean" },
+    "correct": { "type": ["boolean", "null"] },
+    "policy_load_ns": { "type": ["integer", "null"], "minimum": 0 },
+    "translation_ns": { "type": ["integer", "null"], "minimum": 0 },
+    "evaluation_ns": { "type": ["integer", "null"], "minimum": 0 },
+    "total_ns": { "type": ["integer", "null"], "minimum": 0 },
+    "error": { "type": ["string", "null"] },
+    "notes": { "type": ["string", "null"] }
+  }
+}

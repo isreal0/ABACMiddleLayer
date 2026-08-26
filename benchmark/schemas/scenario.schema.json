@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/isreal0/ABACMiddleLayer/benchmark/schemas/scenario.schema.json",
+  "title": "Canonical ABAC scenario",
+  "type": "object",
+  "required": ["id", "description", "subject", "resource", "action", "environment", "expected"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable scenario identifier, e.g. abac-001. Never reused or renumbered once published."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "clearance": { "type": "number" }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "owner": { "type": "string" },
+        "department": { "type": "string" },
+        "classification": { "type": "number" }
+      }
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "network": { "type": "string" },
+        "hour": { "type": "number", "minimum": 0, "maximum": 23 }
+      }
+    },
+    "expected": {
+      "type": "string",
+      "enum": ["Permit", "Deny", "NotApplicable", "Indeterminate"]
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Free-form facets used to build size/feature subsets, e.g. \"small\", \"xacml-rich\", \"compatibility-subset\"."
+    },
+    "unsupported_on": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["middle-layer", "sunxacml", "authzforce", "casbin-cpp"] },
+      "description": "Engines that cannot faithfully represent this scenario's semantics. Adapters must skip (not fake) these."
+    }
+  }
+}
