@@ -35,25 +35,12 @@ def field(d, key):
     return "" if v is None else str(v)
 
 
-def generate_middle_layer(scenarios, output_dir, ref_policies_dir):
-    ml_dir = os.path.join(output_dir, "middle-layer")
-    ml_policies_dir = os.path.join(ml_dir, "policies")
-    os.makedirs(ml_policies_dir, exist_ok=True)
-
-    # Only the XACML 3.0 reference policy -- Balana loads every *.xml file in
-    # its policy directory, so copying the whole ref_policies_dir (which also
-    # holds the XACML 2.0 translation for SunXACML) would make it try to load
-    # a policy in a namespace/schema it never needs to see.
-    ref_name = "xacml3-course-score-policy.xml"
-    shutil.copyfile(os.path.join(ref_policies_dir, ref_name), os.path.join(ml_policies_dir, ref_name))
-
+def write_scenarios_tsv(scenarios, tsv_path):
     columns = [
         "id", "subject_id", "subject_role", "subject_department", "subject_clearance",
         "resource_id", "resource_owner", "resource_department", "resource_classification",
         "action", "env_network", "env_hour", "expected",
     ]
-
-    tsv_path = os.path.join(ml_dir, "scenarios.tsv")
     with open(tsv_path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\t".join(columns) + "\n")
         for s in scenarios:
@@ -71,9 +58,34 @@ def generate_middle_layer(scenarios, output_dir, ref_policies_dir):
             if any("\t" in c or "\n" in c for c in row):
                 raise ValueError(f"scenario {s.get('id')} has a tab/newline in a field, TSV would be corrupted")
             f.write("\t".join(row) + "\n")
-
     print(f"wrote {len(scenarios)} scenarios to {tsv_path}")
+
+
+def generate_middle_layer(scenarios, output_dir, ref_policies_dir):
+    ml_dir = os.path.join(output_dir, "middle-layer")
+    ml_policies_dir = os.path.join(ml_dir, "policies")
+    os.makedirs(ml_policies_dir, exist_ok=True)
+
+    # Only the XACML 3.0 reference policy -- Balana loads every *.xml file in
+    # its policy directory, so copying the whole ref_policies_dir (which also
+    # holds the XACML 2.0 translation for SunXACML) would make it try to load
+    # a policy in a namespace/schema it never needs to see.
+    ref_name = "xacml3-course-score-policy.xml"
+    shutil.copyfile(os.path.join(ref_policies_dir, ref_name), os.path.join(ml_policies_dir, ref_name))
+
+    write_scenarios_tsv(scenarios, os.path.join(ml_dir, "scenarios.tsv"))
     print(f"copied reference policies into {ml_policies_dir}")
+
+
+def generate_casbin_cpp(scenarios, output_dir, ref_policies_dir):
+    cb_dir = os.path.join(output_dir, "casbin-cpp")
+    os.makedirs(cb_dir, exist_ok=True)
+
+    shutil.copyfile(os.path.join(ref_policies_dir, "casbin-model.conf"), os.path.join(cb_dir, "model.conf"))
+    shutil.copyfile(os.path.join(ref_policies_dir, "casbin-policy.csv"), os.path.join(cb_dir, "policy.csv"))
+
+    write_scenarios_tsv(scenarios, os.path.join(cb_dir, "scenarios.tsv"))
+    print(f"copied model.conf + policy.csv to {cb_dir}")
 
 
 def _xml_escape(s):
@@ -275,6 +287,7 @@ def main():
     generate_middle_layer(scenarios, output_dir, ref_policies_dir)
     generate_authzforce(scenarios, output_dir, ref_policies_dir)
     generate_sunxacml(scenarios, output_dir, ref_policies_dir)
+    generate_casbin_cpp(scenarios, output_dir, ref_policies_dir)
     return 0
 
 
