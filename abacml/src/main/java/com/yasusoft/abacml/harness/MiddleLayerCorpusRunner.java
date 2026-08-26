@@ -6,6 +6,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,13 +16,13 @@ import org.wso2.balana.finder.impl.FileBasedPolicyFinderModule;
 import com.yasusoft.abacml.ABACML;
 
 /**
- * Correctness-only runner for the Middle Layer adapter (Step 4/5A). Reads a
- * TSV generated from corpus/canonical/scenarios.json by
- * benchmark/scripts/generate-corpus.py, evaluates each scenario through
- * ABACML.Evaluate_ABAC_Decision against the reference policy, and writes one
- * normalized JSON line per scenario matching benchmark/schemas/result.schema.json.
+ * Runner for the Middle Layer adapter, two modes:
  *
- * Usage: MiddleLayerCorpusRunner <policyDir> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>
+ * Correctness (Step 4/5A):
+ *   MiddleLayerCorpusRunner <policyDir> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>
+ *
+ * Benchmark (Step 5B):
+ *   MiddleLayerCorpusRunner benchmark <policyDir> <scenariosTsv> <manifestConf> <rawOutputTsv> <summaryOutputJson>
  *
  * The policy directory system property is set before ABACML.Evaluate_ABAC_Decision
  * ever calls initBalana(), so this runner's own policy set (not the production
@@ -31,31 +32,25 @@ import com.yasusoft.abacml.ABACML;
 public class MiddleLayerCorpusRunner {
 
     public static void main(String[] args) throws IOException {
+        if (args.length == 6 && "benchmark".equals(args[0])) {
+            runBenchmark(args[1], args[2], args[3], args[4], args[5]);
+            return;
+        }
         if (args.length != 5) {
             System.err.println("usage: MiddleLayerCorpusRunner <policyDir> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>");
+            System.err.println("   or: MiddleLayerCorpusRunner benchmark <policyDir> <scenariosTsv> <manifestConf> <rawOutputTsv> <summaryOutputJson>");
             System.exit(2);
         }
-        String policyDir = args[0];
-        String scenariosTsv = args[1];
-        String outputJsonl = args[2];
-        String corpusCommit = args[3];
-        String adapterCommit = args[4];
+        runCorrectness(args[0], args[1], args[2], args[3], args[4]);
+    }
 
+    private static void runCorrectness(String policyDir, String scenariosTsv, String outputJsonl,
+                                        String corpusCommit, String adapterCommit) throws IOException {
         System.setProperty(FileBasedPolicyFinderModule.POLICY_DIR_PROPERTY, policyDir);
 
-        String hostname;
-        try {
-            hostname = java.net.InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            hostname = "unknown";
-        }
-
+        String hostname = getHostname();
         List<String[]> rows = readTsv(scenariosTsv);
-        String[] header = rows.get(0);
-        Map<String, Integer> col = new HashMap<String, Integer>();
-        for (int i = 0; i < header.length; i++) {
-            col.put(header[i], Integer.valueOf(i));
-        }
+        Map<String, Integer> col = indexHeader(rows.get(0));
 
         int total = 0;
         int correct = 0;
@@ -66,14 +61,8 @@ public class MiddleLayerCorpusRunner {
         // first use and caches it for the rest of this JVM's lifetime, so
         // this isolates that one-time cost from the per-scenario evaluation
         // timings below, which are all "hot" (policy already resident).
-        String[] warmupRow = rows.get(1);
         long loadStart = System.nanoTime();
-        ABACML.Evaluate_ABAC_Decision(
-                get(warmupRow, col, "subject_id"), emptyToNull(get(warmupRow, col, "subject_role")),
-                emptyToNull(get(warmupRow, col, "subject_department")), parseIntOrNull(get(warmupRow, col, "subject_clearance")),
-                get(warmupRow, col, "resource_id"), emptyToNull(get(warmupRow, col, "resource_owner")),
-                emptyToNull(get(warmupRow, col, "resource_department")), parseIntOrNull(get(warmupRow, col, "resource_classification")),
-                get(warmupRow, col, "action"), emptyToNull(get(warmupRow, col, "env_network")), parseIntOrNull(get(warmupRow, col, "env_hour")));
+        evaluateRow(rows.get(1), col);
         long policyLoadNs = System.nanoTime() - loadStart;
 
         PrintWriter out = new PrintWriter(new FileWriter(outputJsonl));
@@ -81,29 +70,14 @@ public class MiddleLayerCorpusRunner {
             for (int r = 1; r < rows.size(); r++) {
                 String[] row = rows.get(r);
                 total++;
-
                 String id = get(row, col, "id");
-                String subjectId = get(row, col, "subject_id");
-                String subjectRole = emptyToNull(get(row, col, "subject_role"));
-                String subjectDept = emptyToNull(get(row, col, "subject_department"));
-                Integer subjectClearance = parseIntOrNull(get(row, col, "subject_clearance"));
-                String resourceId = get(row, col, "resource_id");
-                String resourceOwner = emptyToNull(get(row, col, "resource_owner"));
-                String resourceDept = emptyToNull(get(row, col, "resource_department"));
-                Integer resourceClassification = parseIntOrNull(get(row, col, "resource_classification"));
-                String action = get(row, col, "action");
-                String envNetwork = emptyToNull(get(row, col, "env_network"));
-                Integer envHour = parseIntOrNull(get(row, col, "env_hour"));
                 String expected = get(row, col, "expected");
 
                 String actual;
                 String error = null;
                 long evalStart = System.nanoTime();
                 try {
-                    actual = ABACML.Evaluate_ABAC_Decision(
-                            subjectId, subjectRole, subjectDept, subjectClearance,
-                            resourceId, resourceOwner, resourceDept, resourceClassification,
-                            action, envNetwork, envHour);
+                    actual = evaluateRow(row, col);
                 } catch (Exception e) {
                     actual = null;
                     error = e.toString();
@@ -124,6 +98,180 @@ public class MiddleLayerCorpusRunner {
 
         System.out.println("Middle Layer correctness: " + correct + "/" + total + " scenarios correct");
         System.exit(correct == total ? 0 : 1);
+    }
+
+    private static void runBenchmark(String policyDir, String scenariosTsv, String manifestConf,
+                                      String rawOutputTsv, String summaryOutputJson) throws IOException {
+        System.setProperty(FileBasedPolicyFinderModule.POLICY_DIR_PROPERTY, policyDir);
+
+        Map<String, String> manifest = readManifest(manifestConf);
+        int warmup = Integer.parseInt(manifest.get("warmup_iterations"));
+        int measured = Integer.parseInt(manifest.get("measured_iterations"));
+        int repetitions = Integer.parseInt(manifest.get("repetitions"));
+
+        List<String[]> rows = readTsv(scenariosTsv);
+        Map<String, Integer> col = indexHeader(rows.get(0));
+        List<String[]> scenarioRows = rows.subList(1, rows.size());
+        int n = scenarioRows.size();
+
+        for (int i = 0; i < warmup; i++) {
+            try {
+                evaluateRow(scenarioRows.get(i % n), col);
+            } catch (Exception e) {
+                // ignored during warm-up
+            }
+        }
+
+        List<Long> allLatencies = new ArrayList<Long>();
+        PrintWriter rawOut = new PrintWriter(new FileWriter(rawOutputTsv));
+        try {
+            rawOut.println("repetition\titeration\tscenario_id\tlatency_ns");
+            for (int rep = 0; rep < repetitions; rep++) {
+                for (int i = 0; i < measured; i++) {
+                    String[] row = scenarioRows.get(i % n);
+                    long start = System.nanoTime();
+                    try {
+                        evaluateRow(row, col);
+                    } catch (Exception e) {
+                        // still record latency of the failed call
+                    }
+                    long latencyNs = System.nanoTime() - start;
+                    allLatencies.add(Long.valueOf(latencyNs));
+                    rawOut.println(rep + "\t" + i + "\t" + get(row, col, "id") + "\t" + latencyNs);
+                }
+            }
+        } finally {
+            rawOut.close();
+        }
+
+        writeSummary(summaryOutputJson, "middle-layer", allLatencies, warmup, measured, repetitions);
+        System.out.println("Middle Layer benchmark: " + allLatencies.size() + " measured calls across "
+                + repetitions + " repetitions, summary written to " + summaryOutputJson);
+    }
+
+    private static String evaluateRow(String[] row, Map<String, Integer> col) {
+        return ABACML.Evaluate_ABAC_Decision(
+                get(row, col, "subject_id"), emptyToNull(get(row, col, "subject_role")),
+                emptyToNull(get(row, col, "subject_department")), parseIntOrNull(get(row, col, "subject_clearance")),
+                get(row, col, "resource_id"), emptyToNull(get(row, col, "resource_owner")),
+                emptyToNull(get(row, col, "resource_department")), parseIntOrNull(get(row, col, "resource_classification")),
+                get(row, col, "action"), emptyToNull(get(row, col, "env_network")), parseIntOrNull(get(row, col, "env_hour")));
+    }
+
+    private static String getHostname() {
+        try {
+            return java.net.InetAddress.getLocalHost().getHostName();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    private static Map<String, Integer> indexHeader(String[] header) {
+        Map<String, Integer> col = new HashMap<String, Integer>();
+        for (int i = 0; i < header.length; i++) {
+            col.put(header[i], Integer.valueOf(i));
+        }
+        return col;
+    }
+
+    private static Map<String, String> readManifest(String path) throws IOException {
+        Map<String, String> m = new HashMap<String, String>();
+        BufferedReader br = new BufferedReader(new FileReader(path));
+        try {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                int eq = line.indexOf('=');
+                if (eq < 0) {
+                    continue;
+                }
+                m.put(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+            }
+        } finally {
+            br.close();
+        }
+        return m;
+    }
+
+    private static long readPeakRssKb() {
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("/proc/self/status"));
+            try {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if (line.startsWith("VmHWM:")) {
+                        String[] parts = line.trim().split("\\s+");
+                        return Long.parseLong(parts[1]);
+                    }
+                }
+            } finally {
+                br.close();
+            }
+        } catch (Exception e) {
+            // not on Linux, or /proc unavailable
+        }
+        return -1;
+    }
+
+    private static void writeSummary(String path, String engine, List<Long> latenciesNs,
+                                      int warmup, int measured, int repetitions) throws IOException {
+        List<Long> sorted = new ArrayList<Long>(latenciesNs);
+        Collections.sort(sorted);
+        int n = sorted.size();
+
+        double sum = 0;
+        for (Long v : sorted) {
+            sum += v.doubleValue();
+        }
+        double mean = sum / n;
+        double variance = 0;
+        for (Long v : sorted) {
+            double d = v.doubleValue() - mean;
+            variance += d * d;
+        }
+        double stddev = Math.sqrt(variance / n);
+
+        long min = sorted.get(0).longValue();
+        long max = sorted.get(n - 1).longValue();
+        long median = percentile(sorted, 0.50);
+        long p95 = percentile(sorted, 0.95);
+        long p99 = percentile(sorted, 0.99);
+        double throughputPerSec = 1e9 / mean;
+        long peakRssKb = readPeakRssKb();
+
+        PrintWriter out = new PrintWriter(new FileWriter(path));
+        try {
+            out.println("{");
+            out.println("  \"engine\": \"" + engine + "\",");
+            out.println("  \"warmup_iterations\": " + warmup + ",");
+            out.println("  \"measured_iterations\": " + measured + ",");
+            out.println("  \"repetitions\": " + repetitions + ",");
+            out.println("  \"sample_count\": " + n + ",");
+            out.println("  \"latency_ns\": {");
+            out.println("    \"min\": " + min + ",");
+            out.println("    \"median\": " + median + ",");
+            out.println("    \"mean\": " + Math.round(mean) + ",");
+            out.println("    \"p95\": " + p95 + ",");
+            out.println("    \"p99\": " + p99 + ",");
+            out.println("    \"max\": " + max + ",");
+            out.println("    \"stddev\": " + Math.round(stddev));
+            out.println("  },");
+            out.println("  \"throughput_per_sec\": " + throughputPerSec + ",");
+            out.println("  \"peak_rss_kb\": " + peakRssKb);
+            out.println("}");
+        } finally {
+            out.close();
+        }
+    }
+
+    private static long percentile(List<Long> sorted, double p) {
+        int idx = (int) Math.ceil(p * sorted.size()) - 1;
+        if (idx < 0) idx = 0;
+        if (idx >= sorted.size()) idx = sorted.size() - 1;
+        return sorted.get(idx).longValue();
     }
 
     private static String get(String[] row, Map<String, Integer> col, String name) {

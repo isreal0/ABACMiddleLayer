@@ -1,21 +1,23 @@
-// Correctness-only runner for the Casbin-CPP adapter (Step 4/5A). Reads the
-// same scenarios.tsv format used by the Middle Layer adapter, evaluates each
-// scenario through casbin::Enforcer against model.conf/policy.csv (the
-// single-matcher translation of the shared reference policy), and writes one
-// normalized JSON line per scenario matching benchmark/schemas/result.schema.json.
+// Runner for the Casbin-CPP adapter, two modes:
+//
+// Correctness (Step 4/5A):
+//   casbin_corpus_runner <modelConf> <policyCsv> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>
+//
+// Benchmark (Step 5B):
+//   casbin_corpus_runner benchmark <modelConf> <policyCsv> <scenariosTsv> <manifestConf> <rawOutputTsv> <summaryOutputJson>
 //
 // Casbin has no NotApplicable/Indeterminate concept -- Enforce() is strictly
 // boolean -- so any scenario whose canonical `expected` is "NotApplicable"
 // is marked supported=false, correct=null, rather than forced into a
 // misleading Permit/Deny comparison. See benchmark/docs/semantic-mapping.md.
-//
-// Usage: casbin_corpus_runner <modelConf> <policyCsv> <scenariosTsv> <outputJsonl> <corpusCommit> <adapterCommit>
 
 #include "casbin/enforcer.h"
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -51,81 +53,153 @@ static std::string jsonEscape(const std::string& s) {
     return out;
 }
 
-int main(int argc, char** argv) {
-    if (argc != 7) {
-        std::cerr << "usage: casbin_corpus_runner <modelConf> <policyCsv> <scenariosTsv> "
-                     "<outputJsonl> <corpusCommit> <adapterCommit>\n";
-        return 2;
-    }
-    std::string modelConf = argv[1];
-    std::string policyCsv = argv[2];
-    std::string scenariosTsv = argv[3];
-    std::string outputJsonl = argv[4];
-    std::string corpusCommit = argv[5];
-    std::string adapterCommit = argv[6];
+static std::string getHostname() {
+    char hostname[256] = {0};
+    gethostname(hostname, sizeof(hostname));
+    return std::string(hostname);
+}
 
-    // Enforcer's constructor is what parses model.conf and every row of
-    // policy.csv, so this is genuinely the policy-load cost, not just
-    // object construction.
+static std::vector<std::vector<std::string>> readTsvRows(const std::string& path) {
+    std::vector<std::vector<std::string>> rows;
+    std::ifstream in(path);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        rows.push_back(splitTab(line));
+    }
+    return rows;
+}
+
+static std::map<std::string, std::string> readManifestConf(const std::string& path) {
+    std::map<std::string, std::string> m;
+    std::ifstream in(path);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        m[line.substr(0, eq)] = line.substr(eq + 1);
+    }
+    return m;
+}
+
+static casbin::DataMap buildDataMap(const std::map<std::string, std::string>& f) {
+    json subJ = {{"id", f.at("subject_id")}};
+    if (!f.at("subject_role").empty()) subJ["role"] = f.at("subject_role");
+    if (!f.at("subject_department").empty()) subJ["department"] = f.at("subject_department");
+    if (!f.at("subject_clearance").empty()) subJ["clearance"] = std::stoi(f.at("subject_clearance"));
+
+    json objJ = {{"id", f.at("resource_id")}};
+    if (!f.at("resource_owner").empty()) objJ["owner"] = f.at("resource_owner");
+    if (!f.at("resource_department").empty()) objJ["department"] = f.at("resource_department");
+    if (!f.at("resource_classification").empty()) objJ["classification"] = std::stoi(f.at("resource_classification"));
+
+    json envJ = json::object();
+    if (!f.at("env_network").empty()) envJ["network"] = f.at("env_network");
+    if (!f.at("env_hour").empty()) envJ["hour"] = std::stoi(f.at("env_hour"));
+
+    auto subPtr = std::make_shared<json>(subJ);
+    auto objPtr = std::make_shared<json>(objJ);
+    auto envPtr = std::make_shared<json>(envJ);
+
+    return casbin::DataMap{
+        {"sub", subPtr}, {"obj", objPtr}, {"act", f.at("action")}, {"env", envPtr},
+    };
+}
+
+static long readPeakRssKb() {
+    std::ifstream in("/proc/self/status");
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.rfind("VmHWM:", 0) == 0) {
+            std::istringstream iss(line.substr(6));
+            long kb;
+            iss >> kb;
+            return kb;
+        }
+    }
+    return -1;
+}
+
+static long long percentileNs(std::vector<long long>& sorted, double p) {
+    long idx = static_cast<long>(std::ceil(p * sorted.size())) - 1;
+    if (idx < 0) idx = 0;
+    if (idx >= static_cast<long>(sorted.size())) idx = sorted.size() - 1;
+    return sorted[idx];
+}
+
+static void writeSummary(const std::string& path, const std::string& engine, std::vector<long long> latenciesNs,
+                          int warmup, int measured, int repetitions) {
+    std::sort(latenciesNs.begin(), latenciesNs.end());
+    size_t n = latenciesNs.size();
+    double sum = 0;
+    for (auto v : latenciesNs) sum += static_cast<double>(v);
+    double mean = sum / n;
+    double variance = 0;
+    for (auto v : latenciesNs) {
+        double d = static_cast<double>(v) - mean;
+        variance += d * d;
+    }
+    double stddev = std::sqrt(variance / n);
+    long long minV = latenciesNs.front();
+    long long maxV = latenciesNs.back();
+    long long median = percentileNs(latenciesNs, 0.50);
+    long long p95 = percentileNs(latenciesNs, 0.95);
+    long long p99 = percentileNs(latenciesNs, 0.99);
+    double throughput = 1e9 / mean;
+    long peakRss = readPeakRssKb();
+
+    std::ofstream out(path);
+    out << "{\n"
+        << "  \"engine\": \"" << engine << "\",\n"
+        << "  \"warmup_iterations\": " << warmup << ",\n"
+        << "  \"measured_iterations\": " << measured << ",\n"
+        << "  \"repetitions\": " << repetitions << ",\n"
+        << "  \"sample_count\": " << n << ",\n"
+        << "  \"latency_ns\": {\n"
+        << "    \"min\": " << minV << ",\n"
+        << "    \"median\": " << median << ",\n"
+        << "    \"mean\": " << static_cast<long long>(std::round(mean)) << ",\n"
+        << "    \"p95\": " << p95 << ",\n"
+        << "    \"p99\": " << p99 << ",\n"
+        << "    \"max\": " << maxV << ",\n"
+        << "    \"stddev\": " << static_cast<long long>(std::round(stddev)) << "\n"
+        << "  },\n"
+        << "  \"throughput_per_sec\": " << throughput << ",\n"
+        << "  \"peak_rss_kb\": " << peakRss << "\n"
+        << "}\n";
+}
+
+static int runCorrectness(const std::string& modelConf, const std::string& policyCsv, const std::string& scenariosTsv,
+                           const std::string& outputJsonl, const std::string& corpusCommit, const std::string& adapterCommit) {
     auto loadStart = std::chrono::steady_clock::now();
     casbin::Enforcer enforcer(modelConf, policyCsv);
     long long policyLoadNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now() - loadStart).count();
 
-    char hostname[256] = {0};
-    gethostname(hostname, sizeof(hostname));
-
+    std::string hostname = getHostname();
     auto now = std::chrono::system_clock::now().time_since_epoch();
     long long runIdMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     std::string runId = "run-" + std::to_string(runIdMs);
 
-    std::ifstream in(scenariosTsv);
-    std::string line;
-    std::getline(in, line);  // header
-    std::vector<std::string> header = splitTab(line);
+    auto rows = readTsvRows(scenariosTsv);
+    std::vector<std::string> header = rows.front();
 
     std::ofstream out(outputJsonl);
     int total = 0, correct = 0, supportedCount = 0;
 
-    while (std::getline(in, line)) {
-        if (line.empty()) continue;
-        std::vector<std::string> row = splitTab(line);
+    for (size_t r = 1; r < rows.size(); r++) {
         std::map<std::string, std::string> f;
-        for (size_t i = 0; i < header.size() && i < row.size(); i++) {
-            f[header[i]] = row[i];
-        }
+        for (size_t i = 0; i < header.size() && i < rows[r].size(); i++) f[header[i]] = rows[r][i];
         total++;
 
-        json subJ = {{"id", f["subject_id"]}};
-        if (!f["subject_role"].empty()) subJ["role"] = f["subject_role"];
-        if (!f["subject_department"].empty()) subJ["department"] = f["subject_department"];
-        if (!f["subject_clearance"].empty()) subJ["clearance"] = std::stoi(f["subject_clearance"]);
-
-        json objJ = {{"id", f["resource_id"]}};
-        if (!f["resource_owner"].empty()) objJ["owner"] = f["resource_owner"];
-        if (!f["resource_department"].empty()) objJ["department"] = f["resource_department"];
-        if (!f["resource_classification"].empty()) objJ["classification"] = std::stoi(f["resource_classification"]);
-
-        json envJ = json::object();
-        if (!f["env_network"].empty()) envJ["network"] = f["env_network"];
-        if (!f["env_hour"].empty()) envJ["hour"] = std::stoi(f["env_hour"]);
-
-        auto subPtr = std::make_shared<json>(subJ);
-        auto objPtr = std::make_shared<json>(objJ);
-        auto envPtr = std::make_shared<json>(envJ);
-
-        casbin::DataMap params = {
-            {"sub", subPtr}, {"obj", objPtr}, {"act", f["action"]}, {"env", envPtr},
-        };
-
         std::string expected = f["expected"];
-        std::string actual;
-        std::string error;
+        std::string actual, error;
         bool supported = (expected != "NotApplicable");
 
         auto evalStart = std::chrono::steady_clock::now();
         try {
-            bool result = enforcer.Enforce(params);
+            bool result = enforcer.Enforce(buildDataMap(f));
             actual = result ? "Permit" : "Deny";
         } catch (const std::exception& e) {
             actual = "";
@@ -163,6 +237,64 @@ int main(int argc, char** argv) {
     std::cout << "Casbin-CPP correctness: " << correct << "/" << supportedCount
               << " supported scenarios correct (" << (total - supportedCount)
               << " of " << total << " marked unsupported: no NotApplicable concept)\n";
-
     return (correct == supportedCount) ? 0 : 1;
+}
+
+static int runBenchmark(const std::string& modelConf, const std::string& policyCsv, const std::string& scenariosTsv,
+                         const std::string& manifestConf, const std::string& rawOutputTsv, const std::string& summaryOutputJson) {
+    casbin::Enforcer enforcer(modelConf, policyCsv);
+
+    auto manifest = readManifestConf(manifestConf);
+    int warmup = std::stoi(manifest["warmup_iterations"]);
+    int measured = std::stoi(manifest["measured_iterations"]);
+    int repetitions = std::stoi(manifest["repetitions"]);
+
+    auto rows = readTsvRows(scenariosTsv);
+    std::vector<std::string> header = rows.front();
+    std::vector<std::map<std::string, std::string>> scenarios;
+    for (size_t r = 1; r < rows.size(); r++) {
+        std::map<std::string, std::string> f;
+        for (size_t i = 0; i < header.size() && i < rows[r].size(); i++) f[header[i]] = rows[r][i];
+        scenarios.push_back(f);
+    }
+    size_t n = scenarios.size();
+
+    for (int i = 0; i < warmup; i++) {
+        try { enforcer.Enforce(buildDataMap(scenarios[i % n])); } catch (...) {}
+    }
+
+    std::vector<long long> allLatencies;
+    std::ofstream rawOut(rawOutputTsv);
+    rawOut << "repetition\titeration\tscenario_id\tlatency_ns\n";
+    for (int rep = 0; rep < repetitions; rep++) {
+        for (int i = 0; i < measured; i++) {
+            auto& sc = scenarios[i % n];
+            auto start = std::chrono::steady_clock::now();
+            try { enforcer.Enforce(buildDataMap(sc)); } catch (...) {}
+            long long latencyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            allLatencies.push_back(latencyNs);
+            rawOut << rep << "\t" << i << "\t" << sc.at("id") << "\t" << latencyNs << "\n";
+        }
+    }
+    rawOut.close();
+
+    writeSummary(summaryOutputJson, "casbin-cpp", allLatencies, warmup, measured, repetitions);
+    std::cout << "Casbin-CPP benchmark: " << allLatencies.size() << " measured calls across "
+              << repetitions << " repetitions, summary written to " << summaryOutputJson << "\n";
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    if (argc == 8 && std::string(argv[1]) == "benchmark") {
+        return runBenchmark(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
+    }
+    if (argc != 7) {
+        std::cerr << "usage: casbin_corpus_runner <modelConf> <policyCsv> <scenariosTsv> "
+                     "<outputJsonl> <corpusCommit> <adapterCommit>\n"
+                  << "   or: casbin_corpus_runner benchmark <modelConf> <policyCsv> <scenariosTsv> "
+                     "<manifestConf> <rawOutputTsv> <summaryOutputJson>\n";
+        return 2;
+    }
+    return runCorrectness(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
 }
