@@ -76,9 +76,18 @@ scripts/run-benchmark.sh <engine>       # controlled benchmark (Step 5B)
   runtime-only dependency the pinned 2010-era jar needs but the JDK no
   longer ships: JAXB (`javax.xml.bind`), removed from the JDK in Java 9+.
   Pulled the full `org.glassfish.jaxb:jaxb-runtime:2.3.1` dependency tree
-  via Maven into `/opt/abac-research/engine/jaxb-libs/`. **Casbin-CPP**
-  (a genuinely different paradigm — no native XACML/PDP concept) is the
-  only adapter left to build in Step 4.
+  via Maven into `/opt/abac-research/engine/jaxb-libs/`. **Casbin-CPP** is
+  also done: `scripts/run-correctness.sh casbin-cpp` runs for real, **9/9
+  supported scenarios correct** — Casbin has no per-rule Target/Rule
+  structure or NotApplicable concept (`Enforce()` is strictly boolean), so
+  the whole reference policy became one fixed `[matchers]` expression
+  (`corpus/reference-policies/casbin-model.conf`), and the one scenario
+  whose canonical answer is `NotApplicable` (abac-010) is honestly marked
+  `supported: false` rather than forced into a fake Permit/Deny comparison.
+  **All four adapters are now implemented and passing** — Step 4's
+  remaining work is expanding corpus coverage (medium/large sizes, missing-
+  attribute semantics, deny-overrides/first-applicable demonstration,
+  obligations/advice), not new adapters.
 - **Step 5 (correctness + benchmarking):** not started.
 - **Step 6 (aggregation + report):** not started.
 
